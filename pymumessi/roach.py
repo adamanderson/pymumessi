@@ -92,6 +92,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy.special
 import casperfpga
+import ConfigParser
 import socket
 import binascii
 from lib.binTools import castBin
@@ -99,19 +100,36 @@ from lib.readDict import readDict
 
 class Roach2:
 
-    def __init__(self, ip, paramFile, verbose=False, debug=False):
+    def __init__(self, roachNumber, configFile, verbose=False,
+                 debug=False):
         '''
-        Input:
-            ip - ip address string of ROACH2
-            paramFile - param object or directory string to dictionary containing important info
-            verbose - show print statements
-            debug - Save some things to disk for debugging
+        Parameters:
+        ----------
+        roachNumber : int
+            Number of the roach, corresponding to settings in configFile
+        configFile : str
+            Path to file with configuration settings for each of the boards and defaults
+        verbose : bool
+            More print statements
+        debug : bool
+            Saves data to disk for debugging
+
+        Returns:
+        --------
+        None
         '''
-        #np.random.seed(1) #Make the random phase values always the same
+
+        self.config = ConfigParser.ConfigParser()
+        self.config.read(configFile)
+        self.roachString = 'Roach ' + "%d" % roachNumber
+        self.FPGAParamFile = self.config.get(self.roachString, 'FPGAParamFile')
+        self.ip = self.config.get(self.roachString, 'ipaddress')
+        # self.roachController = Roach2Controls(self.ipaddress, self.FPGAParamFile, True, False)
+        # self.roachController.connect()
+
         self.verbose=verbose
         self.debug=debug
-        
-        self.ip = ip
+
         try:
             self.params = readDict()             
             self.params.readFromFile(paramFile)
@@ -129,7 +147,10 @@ class Roach2:
         self.v7_ready = 0
         self.lut_dump_buffer_size = self.params['lut_dump_buffer_size']
         self.thresholdList = -np.pi*np.ones(1024)
-    
+
+        self.originalDdsShift = self.roachController.checkDdsShift()
+        self.newDdsShift = self.roachController.loadDdsShift(self.originalDdsShift)
+
     def connect(self):
         try:
             self.fpga = casperfpga.casperfpga.CasperFpga(self.ip,timeout=3.)
