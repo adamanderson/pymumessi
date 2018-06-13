@@ -24,8 +24,6 @@ iToolsVersion = 0.2
 import ConfigParser
 import RoachConnection
 reload(RoachConnection)
-import IQPlotWindow
-reload(IQPlotWindow)
 
 def getItoolsVersion():
     return iToolsVersion
@@ -48,9 +46,3 @@ def setup(roachNumber, configFile):
     rc.defineRoachLUTs()
     rc.defineDacLUTs()
     return rc
-
-def plotIQ(rc):
-    reload(IQPlotWindow)
-    iqPlotWindow = IQPlotWindow.IQPlotWindow(rc)
-    iqPlotWindow.show()
-    return iqPlotWindow
