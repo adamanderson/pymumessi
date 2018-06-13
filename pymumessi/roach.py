@@ -2221,9 +2221,9 @@ if __name__=='__main__':
 
 def loadFreq(self):
     '''                                                                                                                                                               
-        Loads the resonator freq files (and attenuations, resIDs)                                                                                                         
-        divides the resonators into streams                                                                                                                               
-        '''
+    Loads the resonator freq files (and attenuations, resIDs)                                                                                                         
+    divides the resonators into streams                                                                                                                               
+    '''
     try:
         print 'old Freq: ', self.roachController.freqList
     except: pass
@@ -2274,7 +2274,12 @@ def loadFreq(self):
 
 
 def defineRoachLUTs(self):
-    '''                                                                                                                                          Defines LO Freq but doesn't load it yet                                                                                                      Defines and loads channel selection blocks                                                                                                   Defines and loads DDS LUTs                                                                                                                   writing the QDR takes a long time! :-(                                                                                                       '''
+    '''
+    Defines LO Freq but doesn't load it yet
+    Defines and loads channel selection blocks
+    Defines and loads DDS LUTs
+    writing the QDR takes a long time! :-(
+    '''
     loFreq = int(self.config.getfloat(self.roachString,'lo_freq'))
     self.roachController.setLOFreq(loFreq)
     self.roachController.generateFftChanSelection()
@@ -2287,7 +2292,12 @@ def defineRoachLUTs(self):
 
 
 def defineDacLUTs(self):
-    '''                                                                                                                                          Defines and loads DAC comb                                                                                                                   Loads LO Freq                                                                                                                                Loads DAC attens 1, 2                                                                                                                        Loads ADC attens 1, 2                                                                                                                        '''
+    '''
+    Defines and loads DAC comb
+    Loads LO Freq
+    Loads DAC attens 1, 2
+    Loads ADC attens 1, 2
+    '''
 
     adcAtten = self.config.getfloat(self.roachString,'adcatten')
     dacAtten = self.config.getfloat(self.roachString,'dacatten_start')
