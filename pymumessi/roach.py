@@ -130,9 +130,9 @@ class Roach2:
 
         try:
             self.params = readDict()             
-            self.params.readFromFile(paramFile)
+            self.params.readFromFile(self.FPGAParamFile)
         except TypeError:
-            self.params = paramFile
+            self.params = self.FPGAParamFile
         
         if debug and not os.path.exists(self.params['debugDir']):
             os.makedirs(self.params['debugDir']) 

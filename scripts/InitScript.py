@@ -6,7 +6,7 @@ Sample script to demonstrate what InitGui.py does when you click on all the butt
 import ConfigParser, pickle, time
 import argparse as ap
 import numpy as np
-from pymumessi.Roach2Controls import Roach2Controls
+from pymumessi.roach import Roach2
 from pymumessi.autoZdokCal import loadDelayCal, findCal
 from pymumessi.myQdr import Qdr as myQdr
 
@@ -46,7 +46,7 @@ if 'connect' in args.stages:
     print "===>Connect"
     ipaddress = config.get('Roach {}'.format(args.roachNum), 'ipaddress')
     FPGAParamFile = config.get('Roach {}'.format(args.roachNum), 'FPGAParamFile')
-    roachController = Roach2Controls(ipaddress, FPGAParamFile, True, False)
+    roachController = Roach2(args.roachNum, args.config, True, False)
     roachController.connect()
 
 # Program V6
