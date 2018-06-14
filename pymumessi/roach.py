@@ -95,6 +95,7 @@ import casperfpga
 import ConfigParser
 import socket
 import binascii
+import pickle
 from lib.binTools import castBin
 from lib.readDict import readDict
 
@@ -1934,12 +1935,12 @@ class Roach2:
         for i in range(len(freqs)):
             print i, resIDs[i], freqs[i], attens[i], phaseOffsList[i], iqRatioList[i]
 
-        self.roachController.generateResonatorChannels(freqs)
-        self.roachController.attenList = attens
-        self.roachController.resIDs = resIDs
-        self.roachController.phaseOffsList = phaseOffsList
-        self.roachController.iqRatioList = iqRatioList
-        print 'new Freq: ', self.roachController.freqList
+        self.generateResonatorChannels(freqs)
+        self.attenList = attens
+        self.resIDs = resIDs
+        self.phaseOffsList = phaseOffsList
+        self.iqRatioList = iqRatioList
+        print 'new Freq: ', self.freqList
 
         return True
 
@@ -1952,13 +1953,13 @@ class Roach2:
         writing the QDR takes a long time! :-(
         '''
         loFreq = int(self.config.getfloat(self.roachString,'lo_freq'))
-        self.roachController.setLOFreq(loFreq)
-        self.roachController.generateFftChanSelection()
-        ddsTones = self.roachController.generateDdsTones()
+        self.setLOFreq(loFreq)
+        self.generateFftChanSelection()
+        ddsTones = self.generateDdsTones()
         with open("ddsTones.pkl", 'wb') as handle:
             pickle.dump(ddsTones, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        self.roachController.loadChanSelection()
-        self.roachController.loadDdsLUT()
+        self.loadChanSelection()
+        self.loadDdsLUT()
         return True
 
 
@@ -1975,18 +1976,18 @@ class Roach2:
         dacAtten1 = np.floor(dacAtten*2)/4.
         dacAtten2 = np.ceil(dacAtten*2)/4.
 
-        dacComb = self.roachController.generateDacComb(globalDacAtten=dacAtten)
+        dacComb = self.generateDacComb(globalDacAtten=dacAtten)
         with open("dacComb.pkl", 'wb') as handle:
             pickle.dump(dacComb, handle, protocol=pickle.HIGHEST_PROTOCOL)
         print "Initializing ADC/DAC board communication"
-        self.roachController.initializeV7UART()
+        self.initializeV7UART()
         print "Setting Attenuators"
-        self.roachController.changeAtten(1,dacAtten1)
-        self.roachController.changeAtten(2,dacAtten2)
-        self.roachController.changeAtten(3,adcAtten)
+        self.changeAtten(1,dacAtten1)
+        self.changeAtten(2,dacAtten2)
+        self.changeAtten(3,adcAtten)
         print "Setting LO Freq"
-        self.roachController.loadLOFreq()
+        self.loadLOFreq()
         print "Loading DAC LUT"
-        self.roachController.loadDacLUT()
+        self.loadDacLUT()
         return True
 
