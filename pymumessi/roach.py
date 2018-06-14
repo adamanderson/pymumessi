@@ -1978,76 +1978,6 @@ class Roach2:
         #Q_list2[-2:]=Q_list[:2]
         return {'I':I_list2, 'Q':Q_list2}
     
-    
-    
-    def loadBeammapCoords(self,beammapDict):
-        """
-        Load the beammap coordinates x,y corresponding to each frqChannel for each stream
-        
-        NOTE: we don't need to worry about loading in positions to empty stream/channel 
-			  positions since they won't trigger on photons. (no probe; dds tone is zeros; filter is zeros)
-        
-        INPUTS:
-            beammapDict contains:
-                'resID'  : list of unique resonator IDs     (ignored)
-                'freqCh' : list of freqCh of resonators.    (index in frequency list)
-                'xCoord' : list of x Coordinates
-                'yCoord' : list of y Coords
-                'flag'   : list of flags from beammap code  (ignored)
-        """
-        
-        allStreamChannels,allStreams = self.getStreamChannelFromFreqChannel()
-        for stream in np.unique(allStreams):
-            streamChannels = allStreamChannels[np.where(allStreams==stream)]
-            streamCoordBits = []
-            for streamChannel in streamChannels:
-                freqChannel = self.getFreqChannelFromStreamChannel(streamChannel,stream)
-                indx = np.where(np.asarray(beammapDict['freqCh'])==freqChannel)[0]
-                if len(indx)==0:
-					# If a resonator is being probed but isn't mentioned in the beammap file
-					# This shouldn't happen since all 10000 pixels should be in the beammap...
-                    # First 20 bits are 10111111111111111111. Fake photons are 01111's. Headers have the frist 8 bits as 1's
-                    x=2**self.params['nBitsXCoord'] - 1 - 2**(self.params['nBitsXCoord']-2)
-                    y=2**self.params['nBitsYCoord'] - 1
-                else:
-                    x=beammapDict['xCoord'][indx[0]]
-                    y=beammapDict['yCoord'][indx[0]]
-                x = max(0,min(2**self.params['nBitsXCoord'] - 1, x))    # clip to between 0 and 2^10-1
-                y = max(0,min(2**self.params['nBitsYCoord'] - 1, y))
-                streamCoordBits.append((int(x) << self.params['nBitsYCoord']) + int(y))
-            streamCoordBits = np.array(streamCoordBits)
-            self.writeBram(memName = self.params['pixelnames_bram'][stream],valuesToWrite = streamCoordBits)
-    '''    
-    def loadBeammapCoords(self,beammap=None,initialBeammapDict=None):
-        """
-        Load the beammap coordinates x,y corresponding to each frqChannel for each stream
-        INPUTS:
-            beammap - to be determined, if None, use initial beammap assignments
-            initialBeammapDict containts
-                'feedline' - the feedline for this roach
-                'sideband' - either 'pos' or 'neg' indicating whether these frequences are above or below the LO
-                'boardRange' - either 'a' or 'b' indicationg whether this board is assigned to low (a) or high (b) frequencies of a feedline
-        """
-
-        if beammap is None:
-            allStreamChannels,allStreams = self.getStreamChannelFromFreqChannel()
-            for stream in np.unique(allStreams):
-                streamChannels = allStreamChannels[np.where(allStreams==stream)]
-                streamCoordBits = []
-                for streamChannel in streamChannels:
-                    freqChannel = self.getFreqChannelFromStreamChannel(streamChannel,stream)
-
-                    coordDict = xyPack(freqChannel=freqChannel,**initialBeammapDict)
-                    x = coordDict['x']
-                    y = coordDict['y']
-                    streamCoordBits.append((x << self.params['nBitsYCoord']) + y)
-                streamCoordBits = np.array(streamCoordBits)
-                self.writeBram(memName = self.params['pixelnames_bram'][stream],valuesToWrite = streamCoordBits)
-            
-
-        else:
-            raise ValueError('loading beammaps not implemented yet')
-    '''
 
     def takeAvgIQData(self,numPts=100):
         """
@@ -2135,187 +2065,103 @@ class Roach2:
         time.sleep(0.01)
         self.fpga.write_int(self.params['txEnUART_reg'],0)        
         
-if __name__=='__main__':
-    if len(sys.argv) > 1:
-        ip = sys.argv[1]
-    else:
-        ip='10.0.0.112'
-    if len(sys.argv) > 2:
-        params = sys.argv[2]
-    else:
-        params='DarknessFpga_V2.param'
-    print ip
-    print params
-
-    #warnings.filterwarnings('error')
-    #freqList = [7.32421875e9, 8.e9, 9.e9, 10.e9,11.e9,12.e9,13.e9,14.e9,15e9,16e9,17.e9,18.e9,19.e9,20.e9,21.e9,22.e9,23.e9]
-    # nFreqs=17
-    #loFreq = 4.6873455e9
-    #loFreq = 6.7354026e9
-    loFreq = 5.e9
-    globalDacAtten=5
-    # spacing = 2.e6
-    # freqList = np.arange(loFreq-nFreqs/2.*spacing,loFreq+nFreqs/2.*spacing,spacing)
-    # freqList+=np.random.uniform(-spacing,spacing,nFreqs)
-    # freqList = np.sort(freqList)
-    #attenList = np.random.randint(40,45,nFreqs)
     
-    #freqList=np.asarray([5.2498416321e9, 5.125256256e9, 4.852323456e9, 4.69687416351e9])#,4.547846e9])
-    #attenList=np.asarray([41,42,43,45])#,6])
-    
-    # freqList=np.asarray([4.620303e9])
-    # attenList=np.asarray([0])
-    
-    #attenList = attenList[np.where(freqList > loFreq)]
-    #freqList = freqList[np.where(freqList > loFreq)]
-    
-    #resIDs, freqList, attenList = np.loadtxt('/mnt/data0/Darkness/20170227/ps_r114_FL3_b_ptsi_train.txt', unpack=True)
-    resIDs, freqList, attenList = np.loadtxt('/mnt/data0/Darkness/20170227/ps_r112_FL3_a_manual.txt', unpack=True)
-    freqList = np.array([5.5e9])
-    attenList = 55*np.ones(len(freqList))
+    def loadFreq(self):
+        '''                   
+        Loads the resonator freq files (and attenuations, resIDs)                                                                                          divides the resonators into streams
+        '''
+        try:
+            print 'old Freq: ', self.roachController.freqList
+        except: pass
+        fn = self.config.get(self.roachString,'freqfile')
+        fn2=fn.rsplit('.',1)[0]+'_NEW.'+ fn.rsplit('.',1)[1]         # Check if ps_freq#_NEW.txt exists
+        print "RoachStateMachine.loadFreq:  fn,fn2=",fn,fn2
+        if os.path.isfile(fn2):
+            fn=fn2
+            print 'Loading freqs from '+fn
 
-    roach_0 = Roach2Controls(ip, params, True, False)
-    roach_0.connect()
-    roach_0.setLOFreq(loFreq)
-    roach_0.generateResonatorChannels(freqList)
-    roach_0.generateFftChanSelection()
-    #roach_0.generateDacComb(resAttenList=attenList,globalDacAtten=9)
-    roach_0.generateDacComb(freqList=freqList, resAttenList=attenList, globalDacAtten=globalDacAtten)
-    print 'Generating DDS Tones...'
-    roach_0.generateDdsTones()
-    roach_0.debug=False
-    #for i in range(10000):
-        
-    #    roach_0.generateDacComb(resAttenList=attenList,globalDacAtten=9)
-    
-    print 'Loading DDS LUT...'
-    #roach_0.loadDdsLUT()
-    print 'Checking DDS Shift...'
-    #DdsShift = roach_0.checkDdsShift()
-    #print DdsShift
-    #roach_0.loadDdsShift(DdsShift)
-    print 'Loading ChanSel...'
-    #roach_0.loadChanSelection()
-    print 'Init V7'
-    roach_0.initializeV7UART(waitForV7Ready=False)
-    #roach_0.initV7MB()
-    roach_0.changeAtten(3, 31.75)
-    roach_0.changeAtten(1, globalDacAtten)
-    roach_0.changeAtten(2, 0)
-    roach_0.loadLOFreq()
-    roach_0.loadDacLUT()
+        freqFile = np.loadtxt(fn)
 
-    
-    
-    
-    #roach_0.generateDacComb(freqList, attenList, 17)
-    #print roach_0.phaseList
-    #print 10**(-0.25/20.)
-    #roach_0.generateDacComb(freqList, attenList, 17, phaseList = roach_0.phaseList, dacScaleFactor=roach_0.dacScaleFactor*10**(-3./20.))
-    #roach_0.generateDacComb(freqList, attenList, 20, phaseList = roach_0.phaseList, dacScaleFactor=roach_0.dacScaleFactor)
-    #roach_0.loadDacLUT()
-    
-    #roach_0.generateDdsTones()
-    #if roach_0.debug: plt.show()
-    
+        #if np.shape(freqFile)[1]==3:
+        if len(np.shape(freqFile))==2: # more than 1 frequency given
+            resIDs = np.atleast_1d(freqFile[:,0])       # If there's only 1 resonator numpy loads it in as a float.
+            freqs = np.atleast_1d(freqFile[:,1])     # We need an array of floats
+            attens = np.atleast_1d(freqFile[:,2])
+            phaseOffsList = np.zeros(len(freqs))
+            iqRatioList = np.ones(len(freqs))
+        elif len(np.shape(freqFile)) == 1: # only 1 frequency given
+            resIDs = np.atleast_1d(freqFile[0])       # If there's only 1 resonator numpy loads it in as a float.
+            freqs = np.atleast_1d(freqFile[1])        # Convert this to an array of floats
+            attens = np.atleast_1d(freqFile[2])
+            phaseOffsList = np.zeros(len(freqs))
+            iqRatioList = np.ones(len(freqs))
+        else:
+            raise ValueError('I can not deal with len(np.shape(freqFile)) = %d'%len(np.shape(freqFile)))
 
-def loadFreq(self):
-    '''                                                                                                                                                               
-    Loads the resonator freq files (and attenuations, resIDs)                                                                                                         
-    divides the resonators into streams                                                                                                                               
-    '''
-    try:
-        print 'old Freq: ', self.roachController.freqList
-    except: pass
-    fn = self.config.get(self.roachString,'freqfile')
-    fn2=fn.rsplit('.',1)[0]+'_NEW.'+ fn.rsplit('.',1)[1]         # Check if ps_freq#_NEW.txt exists
-    print "RoachStateMachine.loadFreq:  fn,fn2=",fn,fn2
-    if os.path.isfile(fn2):
-        fn=fn2
-        print 'Loading freqs from '+fn
-        
-    freqFile = np.loadtxt(fn)
+        assert(len(freqs) == len(np.unique(freqs))), "Frequencies in "+fn+" need to be unique."
+        assert(len(resIDs) == len(np.unique(resIDs))), "Resonator IDs in "+fn+" need to be unique."
+        argsSorted = np.argsort(freqs)  # sort them by frequency (I don't think this is needed)
+        freqs = freqs[argsSorted]
+        resIDs = resIDs[argsSorted]
+        attens = attens[argsSorted]
+        phaseOffsList = iqRatioList[argsSorted]
+        iqRatioList = iqRatioList[argsSorted]
+        for i in range(len(freqs)):
+            print i, resIDs[i], freqs[i], attens[i], phaseOffsList[i], iqRatioList[i]
 
-    #if np.shape(freqFile)[1]==3:
-    if len(np.shape(freqFile))==2: # more than 1 frequency given
-        resIDs = np.atleast_1d(freqFile[:,0])       # If there's only 1 resonator numpy loads it in as a float.
-        freqs = np.atleast_1d(freqFile[:,1])     # We need an array of floats
-        attens = np.atleast_1d(freqFile[:,2])
-        phaseOffsList = np.zeros(len(freqs))
-        iqRatioList = np.ones(len(freqs))
-    elif len(np.shape(freqFile)) == 1: # only 1 frequency given
-        resIDs = np.atleast_1d(freqFile[0])       # If there's only 1 resonator numpy loads it in as a float.
-        freqs = np.atleast_1d(freqFile[1])        # Convert this to an array of floats
-        attens = np.atleast_1d(freqFile[2])
-        phaseOffsList = np.zeros(len(freqs))
-        iqRatioList = np.ones(len(freqs))
-    else:
-        raise ValueError('I can not deal with len(np.shape(freqFile)) = %d'%len(np.shape(freqFile)))
+        self.roachController.generateResonatorChannels(freqs)
+        self.roachController.attenList = attens
+        self.roachController.resIDs = resIDs
+        self.roachController.phaseOffsList = phaseOffsList
+        self.roachController.iqRatioList = iqRatioList
+        print 'new Freq: ', self.roachController.freqList
 
-    assert(len(freqs) == len(np.unique(freqs))), "Frequencies in "+fn+" need to be unique."
-    assert(len(resIDs) == len(np.unique(resIDs))), "Resonator IDs in "+fn+" need to be unique."
-    argsSorted = np.argsort(freqs)  # sort them by frequency (I don't think this is needed)
-    freqs = freqs[argsSorted]
-    resIDs = resIDs[argsSorted]
-    attens = attens[argsSorted]
-    phaseOffsList = iqRatioList[argsSorted]
-    iqRatioList = iqRatioList[argsSorted]
-    for i in range(len(freqs)):
-        print i, resIDs[i], freqs[i], attens[i], phaseOffsList[i], iqRatioList[i]
-        
-    self.roachController.generateResonatorChannels(freqs)
-    self.roachController.attenList = attens
-    self.roachController.resIDs = resIDs
-    self.roachController.phaseOffsList = phaseOffsList
-    self.roachController.iqRatioList = iqRatioList
-    print 'new Freq: ', self.roachController.freqList
-    
-    return True
+        return True
 
 
-def defineRoachLUTs(self):
-    '''
-    Defines LO Freq but doesn't load it yet
-    Defines and loads channel selection blocks
-    Defines and loads DDS LUTs
-    writing the QDR takes a long time! :-(
-    '''
-    loFreq = int(self.config.getfloat(self.roachString,'lo_freq'))
-    self.roachController.setLOFreq(loFreq)
-    self.roachController.generateFftChanSelection()
-    ddsTones = self.roachController.generateDdsTones()
-    with open("ddsTones.pkl", 'wb') as handle:
-        pickle.dump(ddsTones, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    self.roachController.loadChanSelection()
-    self.roachController.loadDdsLUT()
-    return True
+    def defineRoachLUTs(self):
+        '''
+        Defines LO Freq but doesn't load it yet
+        Defines and loads channel selection blocks
+        Defines and loads DDS LUTs
+        writing the QDR takes a long time! :-(
+        '''
+        loFreq = int(self.config.getfloat(self.roachString,'lo_freq'))
+        self.roachController.setLOFreq(loFreq)
+        self.roachController.generateFftChanSelection()
+        ddsTones = self.roachController.generateDdsTones()
+        with open("ddsTones.pkl", 'wb') as handle:
+            pickle.dump(ddsTones, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        self.roachController.loadChanSelection()
+        self.roachController.loadDdsLUT()
+        return True
 
 
-def defineDacLUTs(self):
-    '''
-    Defines and loads DAC comb
-    Loads LO Freq
-    Loads DAC attens 1, 2
-    Loads ADC attens 1, 2
-    '''
+    def defineDacLUTs(self):
+        '''
+        Defines and loads DAC comb
+        Loads LO Freq
+        Loads DAC attens 1, 2
+        Loads ADC attens 1, 2
+        '''
 
-    adcAtten = self.config.getfloat(self.roachString,'adcatten')
-    dacAtten = self.config.getfloat(self.roachString,'dacatten_start')
-    dacAtten1 = np.floor(dacAtten*2)/4.
-    dacAtten2 = np.ceil(dacAtten*2)/4.
+        adcAtten = self.config.getfloat(self.roachString,'adcatten')
+        dacAtten = self.config.getfloat(self.roachString,'dacatten_start')
+        dacAtten1 = np.floor(dacAtten*2)/4.
+        dacAtten2 = np.ceil(dacAtten*2)/4.
 
-    dacComb = self.roachController.generateDacComb(globalDacAtten=dacAtten)
-    with open("dacComb.pkl", 'wb') as handle:
-        pickle.dump(dacComb, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    print "Initializing ADC/DAC board communication"
-    self.roachController.initializeV7UART()
-    print "Setting Attenuators"
-    self.roachController.changeAtten(1,dacAtten1)
-    self.roachController.changeAtten(2,dacAtten2)
-    self.roachController.changeAtten(3,adcAtten)
-    print "Setting LO Freq"
-    self.roachController.loadLOFreq()
-    print "Loading DAC LUT"
-    self.roachController.loadDacLUT()
-    return True
+        dacComb = self.roachController.generateDacComb(globalDacAtten=dacAtten)
+        with open("dacComb.pkl", 'wb') as handle:
+            pickle.dump(dacComb, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        print "Initializing ADC/DAC board communication"
+        self.roachController.initializeV7UART()
+        print "Setting Attenuators"
+        self.roachController.changeAtten(1,dacAtten1)
+        self.roachController.changeAtten(2,dacAtten2)
+        self.roachController.changeAtten(3,adcAtten)
+        print "Setting LO Freq"
+        self.roachController.loadLOFreq()
+        print "Loading DAC LUT"
+        self.roachController.loadDacLUT()
+        return True
 
