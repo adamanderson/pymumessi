@@ -387,10 +387,6 @@ class Roach2:
             iValList = np.array(np.round(toneDict['I']*maxValue),dtype=np.int)
             qValList = np.array(np.round(toneDict['Q']*maxValue),dtype=np.int)
             
-            #print 'iVals: '+str(iValList)
-            #print 'qVals: '+str(qValList)
-            #print np.asarray(iValList).shape
-            
             
             #interweave the values such that we have two samples from freq 0 (row 0), two samples from freq 1, ... to freq 256. Then have the next two samples from freq 1 ...
             freqPad = np.zeros((self.params['nChannelsPerStream'] - len(toneDict['quantizedFreqList']),nDdsSamples),dtype=np.int)
@@ -462,9 +458,7 @@ class Roach2:
                               'nBitsPerMemRow':self.params['nBytesPerQdrSample']*8,
                               'earlierSampleIsMsb':True}
             memVals = self.formatWaveForMem(**formatWaveparams)
-            #time.sleep(.1)
             allMemVals.append(memVals)
-            #time.sleep(5)
             if self.verbose: print "\twriting QDR for Stream",iMem
             writeQDRparams={'memName':memNames[iMem],
                             'valuesToWrite':memVals[:,0],
@@ -594,17 +588,13 @@ class Roach2:
         time.sleep(0.01)
         self.fpga.write_int(self.params['txEnUART_reg'],0)
         time.sleep(0.01)
-        #time.sleep(10)
         self.fpga.write_int(self.params['enBRAMDump_reg'],1)
 
-        
-        #print 'v7 ready before dump: ' + str(self.fpga.read_int(self.params['v7Ready_reg']))
-        
+                
         num_lut_dumps = int(math.ceil(len(memVals)*2/self.lut_dump_buffer_size)) #Each value in memVals is 2 bytes
         if self.verbose:
             print 'num lut dumps ' + str(num_lut_dumps)
-        #print 'len(memVals) ' + str(len(memVals))
-
+        
         sending_data = 1 #indicates that ROACH2 is still sending LUT
                
         for i in range(num_lut_dumps):
@@ -616,9 +606,6 @@ class Roach2:
             iqList = iqList.astype(np.int16)
             toWriteStr = struct.pack('<{}{}'.format(len(iqList), 'h'), *iqList)
             if self.verbose:
-                #print 'To Write Str Length: ', str(len(toWriteStr))
-                #print iqList.dtype
-                #print iqList
                 print 'bram dump # ' + str(i),'\r',
                 sys.stdout.flush()
             while(sending_data):
@@ -699,9 +686,7 @@ class Roach2:
             time.sleep(0.001)
             self.fpga.write_int(self.params['txEnUART_reg'],0)
         
-        #print 'loFreqFrac' + str(loFreqFrac)	
         loFreqFrac = int(loFreqFrac*(2**16))
-        #print 'loFreqFrac' + str(loFreqFrac)
         
         # same as transfer of int bytes
         for i in range(2):
@@ -727,7 +712,6 @@ class Roach2:
 
         if(self.v7_ready == self.params['v7Err']):
             raise Exception('MicroBlaze failed to set LO!')
-        #time.sleep(1)
 
     def loadLOFreqDebug(self,LOFreq=None,regList=None):
         """
@@ -874,16 +858,13 @@ class Roach2:
     def snapZdok(self,nRolls=0):
         snapshotNames = self.fpga.snapshots.names()
 
-        #self.fpga.write_int('trig_qdr',0)#initialize trigger
         self.fpga.write_int('adc_in_trig',0)
         for name in snapshotNames:
             self.fpga.snapshots[name].arm(man_valid=False,man_trig=False)
 
         time.sleep(.1)
-        #self.fpga.write_int('trig_qdr',1)#trigger snapshots
         self.fpga.write_int('adc_in_trig',1)
         time.sleep(.1) #wait for other trigger conditions to be met, and fill buffers
-        #self.fpga.write_int('trig_qdr',0)#release trigger
         self.fpga.write_int('adc_in_trig',0)
         
         adcData0 = self.fpga.snapshots['adc_in_snp_cal0_ss'].read(timeout=5,arm=False)['data']
@@ -1009,9 +990,6 @@ class Roach2:
         self.dacPhaseList = toneDict['phaseList']
         iValues = np.array(np.round(np.sum(toneDict['I'],axis=0)),dtype=np.int)
         qValues = np.array(np.round(np.sum(toneDict['Q'],axis=0)),dtype=np.int)
-        # plt.plot(iValues[0:1000])
-        # plt.plot(qValues[0:1000])
-        # plt.show()
         self.dacFreqComb = iValues + 1j*qValues
         
         # check that we are utilizing the dynamic range of the DAC correctly
@@ -1024,9 +1002,6 @@ class Roach2:
             print '\tsigma_I: '+str(np.std(iValues))+' sigma_Q: '+str(np.std(qValues))
             print '\tLargest val_I: '+str(1.0*np.abs(iValues).max()/np.std(iValues))+' sigma. Largest val_Q: '+str(1.0*np.abs(qValues).max()/np.std(qValues))+' sigma.'
             print '\tExpected val: '+str(expectedHighestVal_sig)+' sigmas'
-            #print '\n\tDac freq list: '+str(self.dacQuantizedFreqList)
-            #print '\tDac Q vals: '+str(qValues)
-            #print '\tDac I vals: '+str(iValues)
             
         if highestVal > expectedHighestVal_sig*np.max((np.std(iValues),np.std(qValues))):
             warnings.warn("The freq comb's relative phases may have added up sub-optimally. You should calculate new random phases")
@@ -1040,46 +1015,6 @@ class Roach2:
         if self.verbose:
             print '...Done!'
 
-        '''
-        if self.debug:
-            plt.figure()
-            plt.plot(iValues)
-            plt.plot(qValues)
-            std_i = np.std(iValues)
-            std_q = np.std(qValues)
-            plt.axhline(y=std_i,color='k')
-            plt.axhline(y=2*std_i,color='k')
-            plt.axhline(y=3*std_i,color='k')
-            plt.axhline(y=expectedHighestVal_sig*std_i,color='r')
-            plt.axhline(y=expectedHighestVal_sig*std_q,color='r')
-            
-            plt.figure()
-            plt.hist(iValues,1000)
-            plt.hist(qValues,1000)
-            x_gauss = np.arange(-maxAmp,maxAmp,maxAmp/2000.)
-            i_gauss = len(iValues)/(std_i*np.sqrt(2.*np.pi))*np.exp(-x_gauss**2/(2.*std_i**2.))
-            q_gauss = len(qValues)/(std_q*np.sqrt(2.*np.pi))*np.exp(-x_gauss**2/(2.*std_q**2.))
-            plt.plot(x_gauss,i_gauss)
-            plt.plot(x_gauss,q_gauss)
-            plt.axvline(x=std_i,color='k')
-            plt.axvline(x=2*std_i,color='k')
-            plt.axvline(x=3*std_i,color='k')
-            plt.axvline(x=expectedHighestVal_sig*std_i,color='r')
-            plt.axvline(x=expectedHighestVal_sig*std_q,color='r')
-            
-            plt.figure()
-            sig = np.fft.fft(self.dacFreqComb)
-            sig_freq = np.fft.fftfreq(len(self.dacFreqComb),1./self.params['dacSampleRate'])
-            plt.plot(sig_freq, np.real(sig),'b')
-            plt.plot(sig_freq, np.imag(sig),'g')
-            for f in self.dacQuantizedFreqList:
-                x_f=f
-                if f > self.params['dacSampleRate']/2.:
-                    x_f=f-self.params['dacSampleRate']
-                plt.axvline(x=x_f, ymin=np.amin(np.real(sig)), ymax = np.amax(np.real(sig)), color='r')
-            #plt.show()
-        '''
-        
         return {'I':iValues,'Q':qValues,'quantizedFreqList':self.dacQuantizedFreqList}
         
     
@@ -1125,20 +1060,11 @@ class Roach2:
         for i in range(len(quantizedFreqList)):
             phi = 2.*np.pi*quantizedFreqList[i]*t
             expValues = amplitudeList[i]*np.exp(1.j*(phi+phaseList[i]))
-            #print 'Rotating ch'+str(i)+' to '+str(phaseList[i]*180./np.pi)+' deg'
             iScale = np.sqrt(2)*iqRatioList[i]/np.sqrt(1+iqRatioList[i]**2)
             qScale = np.sqrt(2)/np.sqrt(1+iqRatioList[i]**2)
             iValList.append(iScale*(np.cos(iqPhaseOffsRadList[i])*np.real(expValues)+np.sin(iqPhaseOffsRadList[i])*np.imag(expValues)))
             qValList.append(qScale*np.imag(expValues))
         
-        '''
-        if self.debug:
-            plt.figure()
-            for i in range(len(quantizedFreqList)):
-                plt.plot(iValList[i])
-                plt.plot(qValList[i])
-            #plt.show()
-        '''
         return {'I':np.asarray(iValList),'Q':np.asarray(qValList),'quantizedFreqList':quantizedFreqList,'phaseList':phaseList}
         
         
@@ -1170,7 +1096,6 @@ class Roach2:
             freqList = freqList[:self.params['nChannels']]
         self.freqList = np.ravel(freqList)
         if len(np.unique(self.freqList)) != len(self.freqList):
-            #warnings.warn("Be careful, I assumed everywhere that the frequencies were unique!")
             raise ValueError
         self.freqChannels = self.freqList
         if self.verbose:
@@ -1284,11 +1209,6 @@ class Roach2:
                 fftBinInds = np.asarray([self.fftBinPadValue]*nStreams)
             self.loadSingleChanSelection(selBinNums=fftBinInds,chanNum=row)
         
-        #for row in range(len(fftBinIndChannels)):
-        #    if row > self.params['nChannelsPerStream']:
-        #        warnings.warn("Too many freqs provided. Can only accommodate "+str(self.params['nChannels'])+" resonators")
-        #        break
-        #    self.loadSingleChanSelection(selBinNums=fftBinIndChannels[row],chanNum=row)
         if self.verbose: print '...Done!'
         if self.debug:
             np.savetxt(self.params['debugDir']+'freqChannels.txt', self.freqChannels/10**9.,fmt='%2.25f',header="2D Array of MKID frequencies [GHz]. \nEach column represents a stream and each row is a channel")
@@ -1325,7 +1245,6 @@ class Roach2:
         if self.verbose: print '\t'+str(chanNum)+': '+str(selBinNums)+'\r',
         sys.stdout.flush()
     
-    #def freqChannelToStreamChannel(self, freqCh=None):
     def getStreamChannelFromFreqChannel(self,freqCh=None):
         '''
         This function converts a channel indexed by the location in the freqlist
@@ -1347,16 +1266,6 @@ class Roach2:
         streams = np.atleast_2d(self.freqChannelToStreamChannel[freqCh])[:,1]
         return channels, streams
         
-        #ch, stream = np.where(np.in1d(self.freqChannels,np.asarray(self.freqList)[freqCh]).reshape(self.freqChannels.shape))
-        #ch=[]
-        #stream=[]
-        #for i in np.atleast_1d(freqCh):
-        #    ch_i, stream_i = np.where(np.in1d(self.freqChannels,np.asarray(self.freqList)[i]).reshape(self.freqChannels.shape))
-        #    ch.append(ch_i)
-        #    stream.append(stream_i)
-        #return np.atleast_1d(ch), np.atleast_1d(stream)
-    
-    #def streamChannelToFreqChannel(self, ch, stream):
     def getFreqChannelFromStreamChannel(self, ch, stream):
         '''
         This function converts a stream/ch index from the firmware
@@ -1373,16 +1282,8 @@ class Roach2:
         '''
         
         freqCh = self.streamChannelToFreqChannel[ch,stream]
-        #if np.any(freqCh==-1):
-        #    raise ValueError('No freq channel exists for ch/stream:',ch[np.where(freqCh==-1)],'/',stream[np.where(freqCh==-1)]
         return freqCh
         
-        #freqChannels = []
-        #for i in range(len(np.atleast_1d(ch))):
-        #    freqCh_i = np.where(np.in1d(self.freqList,np.asarray(self.freqChannels)[np.atleast_1d(ch)[i],np.atleast_1d(stream)[i]]))[0]
-        #    freqChannels.append(freqCh_i)
-        #return np.atleast_1d(freqChannels)
-        #return  np.where(np.in1d(self.freqList,np.asarray(self.freqChannels)[ch,stream]))[0]
         
     def setMaxCountRate(self, cpsLimit = 2500):
         for reg in self.params['captureCPSlim_regs']:
@@ -1399,7 +1300,6 @@ class Roach2:
             thresholdRad: The threshold in radians.  The phase must drop below this value to trigger a photon event
             freqChannel - channel as indexed by the freqList
         """
-        #ch, stream = self.freqChannelToStreamChannel(freqChannel)
         ch, stream = self.getStreamChannelFromFreqChannel(freqChannel)
         self.thresholdList[ch+(stream<<8)] = thresholdRad
         self.setThresh(thresholdRad = thresholdRad,ch=int(ch), stream=int(stream))
@@ -1413,9 +1313,6 @@ class Roach2:
             stream - the stream number
         """
         
-        #convert deg to radians
-        #thresholdRad = thresholdDeg * np.pi/180.
-
         #format it as a fix16_13 to be placed in a register
         thresholdRad = max(thresholdRad, -3.8) #overflow if threshold is less than -4
         binThreshold = castBin(thresholdRad,quantization='Round',nBits=16,binaryPoint=13,format='uint')
@@ -1464,7 +1361,6 @@ class Roach2:
         # Decide which channels to write FIRs to
         try:
             freqChans = range(len(self.freqList))
-            #channels, streams = self.freqChannelToStreamChannel(freqChans)      # Need to be careful about how the resonators are distributed into firmware streams
             channels, streams = self.getStreamChannelFromFreqChannel(freqChans)
         except AttributeError:      # If we haven't loaded in frequencies yet then load FIRs into all channels
             freqChans = range(self.params['nChannels'])
@@ -1511,7 +1407,6 @@ class Roach2:
         INPUTS:
             freqChan - the resonator channel as indexed in the freqList
         '''
-        #ch, stream = self.freqChannelToStreamChannel(freqChan)
         ch, stream = self.getStreamChannelFromFreqChannel(freqChan)
         selChanIndex = (int(stream)<<8) + int(ch)
         print "Taking phase snap from ch/stream:",str(ch),'/',str(stream),' selChanIndex:',str(selChanIndex)
@@ -1543,7 +1438,6 @@ class Roach2:
         dt=self.params['nChannelsPerStream']/self.params['fpgaClockRate']
         snapDict['time']=dt*np.arange(len(trig))
         snapDict['swTrig']=self.calcSWTriggers(selChanIndex, snapDict['phase'])
-        #snapDict['swTrig']=snapDict['trig']
         return snapDict
 
     def calcSWTriggers(self, selChanIndex, phaseData, nNegDerivChecks=10, nNegDerivLeniance=1, nPosDerivChecks=2, deadtime=10):
@@ -1568,7 +1462,6 @@ class Roach2:
         isPosDeriv = phaseDeriv > 0
         phaseData = phaseData - np.median(phaseData) #baseline subtract data
         threshCond = phaseData < self.thresholdList[selChanIndex]
-        #threshCond = np.delete(meetsThresh,np.arange(0,nNegDerivChecks)) #align this condition with derivatives
         threshCond = np.delete(threshCond,np.arange(0,nNegDerivChecks)) #align this condition with derivatives
         
         negDerivChecksSum = np.zeros(len(isNegDeriv[0:-nNegDerivChecks-1]))
@@ -1597,7 +1490,6 @@ class Roach2:
         return trigger
 
 
-    #def startPhaseStream(self,selChanIndex=0, pktsPerFrame=100, fabric_port=50000, destIPID=50):
     def startPhaseStream(self,selChanIndex=0, pktsPerFrame=100, fabric_port=50000, hostIP='10.0.0.50'):
         """initiates streaming of phase timestream (after prog_fir) to the 1Gbit ethernet
 
@@ -1611,10 +1503,6 @@ class Roach2:
         
         dest_ip = binascii.hexlify(socket.inet_aton(hostIP))
         dest_ip = int(dest_ip,16)
-        #dest_ip = 0xa000000 + destIPID
-        #print dest_ip
-        #configure the gbe core, 
-        #print 'restarting'
         self.fpga.write_int(self.params['destIP_reg'],dest_ip)
         self.fpga.write_int(self.params['phasePort_reg'],fabric_port)
         self.fpga.write_int(self.params['wordsPerFrame_reg'],pktsPerFrame)
@@ -1655,10 +1543,7 @@ class Roach2:
         OUTPUTS:
             self.phaseTimeStreamData - phase packet data. See parsePhaseStream()
         """
-        #d = datetime.datetime.today()
-        #filename = ('phase_dump_pixel_' + str(channel) + '_' + str(d.day) + '_' + str(d.month) + '_' + 
-        #    str(d.year) + '_' + str(d.hour) + '_' + str(d.minute) + str('.bin'))
-                
+
         if self.verbose:
             print 'host ' + host
             print 'port ' + str(port)
@@ -1678,8 +1563,7 @@ class Roach2:
             print 'Bind failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
             sock.close()
             raise
-        #print 'Socket bind complete'
-
+        
         bufferSize = int(8*pktsPerFrame) #Each photon word is 8 bytes
         iFrame = 0
         nFramesLost = 0
@@ -1687,10 +1571,6 @@ class Roach2:
         expectedPackDiff = -1
         frameData = ''
 
-        #dumpFile = open(filename, 'w')
-        
-        #self.lastPhaseDumpFile = filename
-        
         startTime = time.time()
         try:
             while (time.time()-startTime) < duration:
@@ -1704,15 +1584,10 @@ class Roach2:
             print 'Exiting'
             sock.close()
             self.phaseTimeStreamData = frameData
-            #dumpFile.write(frameData)
-            #dumpFile.close()
             return
 
-        #print 'Exiting'
         sock.close()
         self.phaseTimeStreamData = frameData
-        #dumpFile.write(frameData)
-        #dumpFile.close()    
         return self.phaseTimeStreamData
     
     def takePhaseStreamDataOfFreqChannel(self, freqChan=0, duration=2, pktsPerFrame=100, fabric_port=50000, hostIP='10.0.0.50'):
@@ -1755,7 +1630,6 @@ class Roach2:
         self.startPhaseStream(selChanIndex, pktsPerFrame, fabric_port, hostIP )
         if self.verbose:
             print "Collecting phase time stream..."
-        #self.recvPhaseStream(selChanIndex, duration, pktsPerFrame, '10.0.0.'+str(destIPID), fabric_port)
         phaseTimeStreamData=self.recvPhaseStream(selChanIndex, duration, pktsPerFrame, hostIP, fabric_port)
         self.stopStream()
         if self.verbose:
@@ -1764,7 +1638,6 @@ class Roach2:
         return self.parsePhaseStream(phaseTimeStreamData,pktsPerFrame)
         
     
-    #def parsePhaseStream(self, phaseDumpFile=None, pktsPerFrame=100):
     def parsePhaseStream(self, phaseTimeStreamData=None, pktsPerFrame=100):
         """
         This function parses the packet data from recvPhaseStream()
@@ -1776,14 +1649,6 @@ class Roach2:
         OUTPUTS:
             phases - a list of phases in radians
         """
-        #if(phaseDumpFile == None):
-        #    try:
-        #        phaseDumpFile = self.lastPhaseDumpFile
-        #    except AttributeError:
-        #        print 'Specify a file or run takePhaseStreamData()'
-        #
-        #with open(phaseDumpFile,'r') as dumpFile:
-        #    data = dumpFile.read()
         data = phaseTimeStreamData
         if phaseTimeStreamData is None:
             data = self.phaseTimeStreamData
@@ -1810,9 +1675,6 @@ class Roach2:
 
         #add an axis so we can broadcast
         #and shift away the bits we don't keep for each row
-        #print np.shape(words[:,np.newaxis]),words.dtype
-        #print bitshifts
-        #print words[0:10]
         phases = (words[:,np.newaxis]) >> bitshifts
         phases = phases & bitmask
 
@@ -1822,7 +1684,6 @@ class Roach2:
         phases = phases.flatten(order='C')
         phases = np.array(phases,dtype=np.uint64)
         signBits = np.array(phases / (2**(nBitsPerPhase-1)),dtype=np.bool)
-        #print signBits[0:10]
 
         #check the sign bits to see what values should be negative
         #for the ones that should be negative undo the 2's complement, and flip the sign
@@ -1833,21 +1694,6 @@ class Roach2:
         phases = phases / 2**binPtPhase
 
         return phases
-        #convert from radians to degrees
-        #phases = 180./np.pi * phases
-        #plt.plot(phases[-2**15:],'.-')
-
-        # photonPeriod = 4096 #timesteps (us)
-
-        # #fold it and make sure we have the same phases every time
-        # nPhotons = len(phases)//photonPeriod
-        # phases = phases[0:(nPhotons*photonPeriod)].reshape((-1,photonPeriod))
-        # disagreement = (phases[1:] - phases[0])
-        # print 'discrepancies:',np.sum(disagreement)
-
-        # np.save
-
-        #plt.show()
 
     
     def performIQSweep(self,startLOFreq,stopLOFreq,stepLOFreq):
@@ -1896,7 +1742,6 @@ class Roach2:
             if self.verbose:
                 print 'Sweeping LO ' + str(LOFreqs[i]) + ' MHz'
             self.loadLOFreq(LOFreqs[i])
-            #time.sleep(0.01)    # I dunno how long it takes to set the LO
             if(i%2==0):
                 for stream in range(nStreams):
                     self.fpga.snapshots[self.params['iqSnp_regs'][stream]].arm(man_valid = False, man_trig = False) 
@@ -1920,7 +1765,6 @@ class Roach2:
         self.loadLOFreq()   # reloads initial lo freq
         self.iqSweepData = self.formatIQSweepData(iqData)
         self.iqSweepData['freqOffsets'] = np.copy((LOFreqs*10**6. - self.LOFreq))   # [Hz]
-        #self.iqSweepData = iqData
         return self.iqSweepData
     
     def formatIQSweepData(self, iqDataStreams):
@@ -1941,7 +1785,6 @@ class Roach2:
         # Only return IQ data for channels/streams with resonators associated with them
         try:
             freqChans = range(len(self.freqList))
-            #channels, streams = self.freqChannelToStreamChannel(freqChans)      # Need to be careful about how the resonators are distributed into firmware streams
             channels, streams = self.getStreamChannelFromFreqChannel(freqChans)
         except AttributeError:      # If we haven't loaded in frequencies yet then grab all channels
             freqChans = range(self.params['nChannels'])
@@ -1952,30 +1795,16 @@ class Roach2:
         Q_list = []
         for i in range(len(freqChans)):
             ch, stream = np.atleast_1d(channels)[i], np.atleast_1d(streams)[i]
-            #if i==380 or i==371:
-            #    print 'i:',i,' stream/ch:',stream,'/',ch
-            #    print 'freq[ch]:',self.freqList[i]
-            #    print 'freq[ch,stream]:',self.freqChannels[ch,stream]
             I = iqDataStreams[stream, ch :: self.params['nChannelsPerStream']*2]
             Q = iqDataStreams[stream, ch+self.params['nChannelsPerStream'] :: self.params['nChannelsPerStream']*2]
-            #Ivals = np.roll(I.flatten(),-2) 
-            #Qvals = np.roll(I.flatten(),-2)
             I_list.append(I.flatten())
             Q_list.append(Q.flatten())
         
         return {'I':I_list, 'Q':Q_list}
-        
-        #I_list2=I_list[2:] + I_list[:2]
-        #Q_list2=Q_list[2:] + Q_list[:2]
-        
+                
         I_list2 = I_list[-2:] + I_list[:-2]
         Q_list2 = Q_list[-2:] + Q_list[:-2]
         
-        #I_list2[:-2]=I_list[2:]     # There is a 2 cycle delay in the snapshot block
-        #I_list2[-2:]=I_list[:2]     # need to shift the channels by two
-        #Q_list2=Q_list
-        #Q_list2[:-2]=Q_list[2:]
-        #Q_list2[-2:]=Q_list[:2]
         return {'I':I_list2, 'Q':Q_list2}
     
 
@@ -2022,7 +1851,6 @@ class Roach2:
             self.fpga.write_int(self.params['iqSnpStart_reg'],0)
 
         self.iqToneData = self.formatIQSweepData(iqData)
-        #self.iqToneDataRaw = iqData
         return self.iqToneData
     
     def loadIQcenters(self, centers):
@@ -2041,13 +1869,10 @@ class Roach2:
         for i in range(len(centers)):
             ch = channels[i]
             stream=streams[i]
-            #ch, stream = np.where(self.freqChannels == self.freqList[i])
-            #print 'IQ center',ch,centers[i][0],centers[i][1]
             I_c = int(centers[i][0]/2**3)
             Q_c = int(centers[i][1]/2**3)
             
             center = (I_c<<16) + (Q_c<<0)   # 32 bit number - 16bit I + 16bit Q
-            #print 'loading I,Q',I_c,Q_c
             self.fpga.write_int(self.params['iqCenter_regs'][stream], center)
             self.fpga.write_int(self.params['iqLoadCenter_regs'][stream], (ch<<1)+(1<<0))
             self.fpga.write_int(self.params['iqLoadCenter_regs'][stream], 0)
