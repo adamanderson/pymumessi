@@ -153,9 +153,9 @@ class Roach2:
 
     def connect(self):
         try:
-            self.fpga = casperfpga.casperfpga.CasperFpga(self.ip,timeout=3.)
+            self.fpga = casperfpga.casperfpga.CasperFpga(self.ip,timeout=30.)
         except:
-            self.fpga = casperfpga.katcp_fpga.KatcpFpga(self.ip,timeout=3.)
+            self.fpga = casperfpga.katcp_fpga.KatcpFpga(self.ip,timeout=30.)
         time.sleep(.1)
         self.fpga._timeout = 50.
         if not self.fpga.is_running():
