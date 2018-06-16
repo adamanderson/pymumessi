@@ -50,4 +50,4 @@ stop_DACAtten = config.getfloat('Roach '+str(args.roachNum),'dacatten_stop')
 start_ADCAtten = config.getfloat('Roach '+str(args.roachNum),'adcatten')
 
 # run the sweep itself
-sweep_data = roach_board.performIQSweep(LO_start, LO_stop, LO_step)
+sweep_data = roach_board.performIQSweep(LO_start/1.e6, LO_stop/1.e6, LO_step/1.e6)
