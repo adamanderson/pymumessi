@@ -59,8 +59,7 @@ import copy
 import time
 import datetime
 import warnings
-import yaml
-
+import pymumessi
 
 # add a NOTICE logging level
 
@@ -189,9 +188,11 @@ class LoggingManager(object):
         # Figure out where we are putting things (for the child-loggers)
         if logdir:
             self.logdir = logdir
-        else:
+        elif 'PYMUMESSI_OUTDIR' in os.environ:
             self.logdir = os.path.dirname(os.environ['PYMUMESSI_OUTDIR'])
-
+        else:
+            self.logdir = os.path.dirname(pymumessi.__path__[0])
+            
         if not os.path.exists(self.logdir):
             os.makedirs(self.logdir, mode=0o0777)
             os.chmod(self.logdir, 0o0777)
@@ -254,9 +255,9 @@ class LoggingManager(object):
             alg_dir = custom_path
 
         else:
-            # fall back to global default if not supplied
-            if dir_suffix is None:
-                dir_suffix = _logging_dir_suffix
+            # # fall back to global default if not supplied
+            # if dir_suffix is None:
+            #     dir_suffix = _logging_dir_suffix
 
             if dir_suffix is None:
                 alg_dir = os.path.join(self.logdir, self.day_path,

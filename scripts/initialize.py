@@ -9,6 +9,8 @@ import numpy as np
 from pymumessi.roach import Roach2
 from pymumessi.autoZdokCal import loadDelayCal, findCal
 from pymumessi.myQdr import Qdr as myQdr
+from pymumessi.umux_logging import LoggingManager
+import logging
 
 P = ap.ArgumentParser(description="Initialize readout boards.",
                       formatter_class=ap.RawTextHelpFormatter)
@@ -28,11 +30,18 @@ P.add_argument('--stages', nargs='*', dest='stages', action='store',
                '\nZdok : calibrate the Zdok interface'
                '\nQDR : calibrate the QDR')
 
-
 args = P.parse_args()
 
+
+LM = LoggingManager()
+logger = LM.get_child_logger(target=args.roachNum,
+                             alg_name='initialize',
+                             setup=True)
+
+
 # Get the configuration
-print "===> Read configuration"
+LoggingManager.set_console_level(logging.INFO)
+logger.log(level=logging.INFO, msg="===> Read configuration")
 config = ConfigParser.ConfigParser()
 config.read(args.config)
 print "Configuration read from {}".format(args.config)
