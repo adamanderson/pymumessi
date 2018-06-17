@@ -1,6 +1,9 @@
 # emacs
 *~
-#*
+*#
 
 # python
 *.pyc
+
+# pickle files
+*.pkl
