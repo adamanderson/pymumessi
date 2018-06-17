@@ -52,9 +52,6 @@ Examples:
     >>> childlogger.info('This is a logging message', extra={'extra_field_key':'extra_field_value'})
     >>>     '2014-07-28 17:24:17 | INFO | MACRO | INPUT_FILE.py | INPUT_MODULE | 'TARGET_OBJECT' | This is a logging message | extra_field_key: extra_field_value'"""
 
-__all__ = ['LoggingManager', 'DfmuxFormatter', 'configure_logging',
-           'load_logging_config', 'set_logging_timezone', 'set_logging_dir_suffix']
-
 import logging
 import sys
 import os
@@ -64,7 +61,6 @@ import datetime
 import warnings
 import yaml
 
-#logging.captureWarnings(True)
 
 # add a NOTICE logging level
 
@@ -153,94 +149,6 @@ def set_logging_timezone(timezone):
     global _logging_timezone
     _logging_timezone = _get_timezone(timezone)
 
-# common YAML config handling
-def load_logging_config():
-    """
-    Read the logging configuration files on on disk.
-    This first loads the default config from pydfmux/config.yaml.default
-    as a dictionary, then updates certain keys from the user configuration
-    pydfmux/config.yaml.
-
-    The merged dictionary is returned.
-    """
-
-    log_config = os.path.join(os.path.dirname(pydfmux.__file__), 'logging.yaml.default')
-    config_dict = yaml.load(open(log_config))
-
-    try:
-        log_config_user = os.path.join(
-            os.path.dirname(pydfmux.__file__), 'config.yaml')
-        config_dict_user = yaml.load(open(log_config_user))
-
-        # overwrite default values with user supplied ones
-        if 'filename' in config_dict_user:
-            config_dict['handlers']['file']['filename'] = config_dict_user['filename']
-            config_dict['handlers']['file_console']['filename'] = config_dict_user[
-                'filename'].rsplit('.log', 1)[0]+'.console.log'
-
-        if 'timezone' in config_dict_user:
-            config_dict['timezone'] = config_dict_user['timezone']
-
-    except IOError:
-        pass
-
-    if config_dict['handlers']['file']['filename'] == 'pydfmux.log':
-        config_dict['handlers']['file']['filename'] = os.path.join(
-            os.path.dirname(pydfmux.__file__), 'pydfmux.log')
-        config_dict['base_dir_logging'] = True
-    else:
-        config_dict['base_dir_logging'] = False
-
-    return config_dict
-
-# global logging config, typically loaded once from disk.
-_logging_config = None
-
-def configure_logging(reload=False):
-    """
-    Apply the logging configuration for logger output, using the
-    dictionary loaded using `load_logging_config()`.
-
-    If the user config.yaml contains a `timezone` key, the logging
-    timezone is updated.
-
-    A warning is issued if the root log file is stored in the base
-    pydfmux directory.
-    """
-    global _logging_config
-
-    try:
-        if reload or _logging_config is None:
-            _logging_config = load_logging_config()
-    except IOError:
-        # pydfmux/config.yaml likely didn't exist -- oh well.
-        warnings.warn('Unable to apply default logging policy!')
-    else:
-        if 'timezone' in _logging_config:
-            set_logging_timezone(_logging_config.pop('timezone'))
-
-        logging.config.dictConfig(_logging_config)
-        logging.captureWarnings(True)
-
-        if _logging_config.pop('base_dir_logging', False):
-            logging.getLogger().warning(
-                'Failed to find pydfmux/config.yaml. Logging and output files will be saved in '
-                'your pydfmux base folder.')
-
-# global default logging directory suffix
-_logging_dir_suffix = None
-
-def set_logging_dir_suffix(suffix=None):
-    """
-    Set the global default suffix appended to child logger output directories.
-    Use None to disable, or a string to change.
-    """
-
-    global _logging_dir_suffix
-
-    _logging_dir_suffix = None if suffix is None else str(suffix)
-    logging.getLogger().info(
-        "Logging directory suffix reset to: {}".format(_logging_dir_suffix))
 
 class LoggingManager(object):
     """A custom class that makes the MainLogger and childlogging objects,
@@ -282,8 +190,7 @@ class LoggingManager(object):
         if logdir:
             self.logdir = logdir
         else:
-            self.logdir = os.path.dirname(
-                _logging_config['handlers']['file']['filename'])
+            self.logdir = os.path.dirname(os.environ['PYMUMESSI_OUTDIR'])
 
         if not os.path.exists(self.logdir):
             os.makedirs(self.logdir, mode=0o0777)
