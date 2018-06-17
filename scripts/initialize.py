@@ -37,22 +37,23 @@ LM = LoggingManager()
 logger = LM.get_child_logger(target=args.roachNum,
                              alg_name='initialize',
                              setup=True)
-
+logger.setLevel(logging.DEBUG)
+LoggingManager.set_console_level('DEBUG')
 
 # Get the configuration
-LoggingManager.set_console_level(logging.INFO)
-logger.log(level=logging.INFO, msg="===> Read configuration")
+logger.log(level=logging.INFO,
+           msg="Reading configuration file: {}".format(args.config))
 config = ConfigParser.ConfigParser()
 config.read(args.config)
-print "Configuration read from {}".format(args.config)
 for section in config.sections():
-    print "   Configuration section:",section
+    logger.log(level=logging.INFO,
+               msg="   CONFIGURATION SECTION : {}".format(section))
     for item in config.items(section):
-        print "   %20s : %s"%item
+        logger.log(level=logging.WARNING, msg="   {:20s} : {}".format(item[0], item[1]))
 
 # Connect
 if 'connect' in args.stages:
-    print "===>Connect"
+    logger.log(level=logging.INFO, msg="Connecting to roach")
     ipaddress = config.get('Roach {}'.format(args.roachNum), 'ipaddress')
     FPGAParamFile = config.get('Roach {}'.format(args.roachNum), 'FPGAParamFile')
     roachController = Roach2(args.roachNum, args.config, True, False)
@@ -60,27 +61,36 @@ if 'connect' in args.stages:
 
 # Program V6
 if 'v6' in args.stages:
-    print "===>Program V6"
+    logger.log(level=logging.INFO, msg="Programming V6 FPGA")
     fpgPath = config.get('Roach {}'.format(args.roachNum), 'fpgPath')
     roachController.fpga.upload_to_ram_and_program(fpgPath)
     fpgaClockRate = roachController.fpga.estimate_fpga_clock()
-    print "Fpga Clock Rate:",fpgaClockRate
+    logger.log(level=logging.INFO, msg="Fpga Clock Rate: {}".format(fpgaClockRate))
 
 # Initialize V7
 if 'v7' in args.stages:
-    print "===>Initialize V7"
+    logger.log(level=logging.INFO, msg='Initializing V6 FPGA')
+    
     waitForV7Ready=config.getboolean('Roach {}'.format(args.roachNum),'waitForV7Ready')
+
+    logger.log(level=logging.INFO, msg='Initializing UART')
     roachController.initializeV7UART(waitForV7Ready=waitForV7Ready)
-    print 'initialized uart'
+    logger.log(level=logging.INFO, msg='UART initialized')
+
+    logger.log(level=logging.INFO, msg='Initializing V7 MB')
     roachController.initV7MB()
-    print 'initialized mb'
+    logger.log(level=logging.INFO, msg='V7 MB initialized')
+
+    logger.log(level=logging.INFO, msg='Setting LO to {} GHz'.format(2))
     roachController.setLOFreq(2.e9)
+    logger.log(level=logging.INFO, msg='LO frequency set to {} GHz'.format(2))
+
     roachController.loadLOFreq()
     print 'Set LO to 2 GHz'
 
 # Calibrate Z-DOK
 if 'Zdok' in args.stages:
-    print "===>Calibrate Z-DOK"
+    logger.log(level=logging.INFO, msg='Calibrating Z-DOK')
     roachController.sendUARTCommand(0x4)
     time.sleep(0.1)
     roachController.fpga.write_int('adc_in_i_scale',2**7) # set relative IQ scaling to 1
@@ -89,27 +99,27 @@ if 'Zdok' in args.stages:
     busStarts = [0,14,28,42]
     busBitLength = 12
     for iBus in xrange(len(busDelays)):
-        print "iBus =",iBus
+        logger.log(level=logging.INFO, msg='starting iBus {}'.format(iBus))
         delayLut = zip(np.arange(busStarts[iBus],busStarts[iBus]+busBitLength), 
                        busDelays[iBus] * np.ones(busBitLength))
-        print "delayLut =",delayLut
+        logger.log(level=logging.INFO, msg='delayLut = '.format(delayLut))
         loadDelayCal(roachController.fpga,delayLut)
-        print "done with iBus =",iBus
+        logger.log(level=logging.INFO, msg='done with iBus {}'.format(iBus))
 
     calDict = findCal(roachController.fpga)
-    print "calDict=",calDict
+    logger.log(level=logging.INFO, msg='calDict = '.format(calDict))
 
     roachController.sendUARTCommand(0x5)
-    print 'switched off ADC ZDOK Cal ramp'
+    logger.log(level=logging.INFO, msg='switched off ADC ZDOK Cal ramp')
 
 # Calibrate QDR
 if 'QDR' in args.stages:
-    print "===>Calibrate QDR"
+    logger.log(level=logging.INFO, msg='Calibrating QDR')
     calVerbosity = 0
     bFailHard = False
     results = {}
     for iQdr,qdr in enumerate(roachController.fpga.qdrs):
         mqdr = myQdr.from_qdr(qdr)
         results[qdr.name] = mqdr.qdr_cal2(fail_hard=bFailHard,verbosity=calVerbosity)
-    print 'Qdr cal results:',results
+    logger.log(level=logging.INFO, msg='Qdr cal results: {}'.format(results))
     
