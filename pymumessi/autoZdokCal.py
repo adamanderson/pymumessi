@@ -9,7 +9,8 @@ import matplotlib.pyplot as plt
 import casperfpga
 import sys
 import scipy.ndimage
-from Roach2Controls import Roach2Controls
+import argparse as ap
+from roach import Roach2
 
 def incrementMmcmPhase(fpga,stepSize=2):
 
@@ -138,13 +139,16 @@ def findCalPattern(fpga,bPlot=False,nSteps=60,stepSize=4):
 
 
 if __name__=='__main__':
-    if len(sys.argv) > 1:
-        ip = '10.0.0.'+sys.argv[1]
-    else:
-        print 'Usage:',sys.argv[0],'roachNum'
-    print ip
+    P = ap.ArgumentParser(description='Initialize readout boards.',
+                          formatter_class=ap.RawTextHelpFormatter)
+    P.add_argument('roachNum', default=100, action='store', type=int,
+                   help='Roach number to initialize')
+    P.add_argument('-c', '--config', action='store', default='init.cfg',
+                   help='Config file to load')
 
-    roach = Roach2Controls(ip, '/mnt/data0/MkidDigitalReadout/DataReadout/ChannelizerControls/DarknessFpga_V2.param', True, False)
+    args = P.parse_args()
+    
+    roach = Roach2(args.roachNum, args.config)
     roach.connect()
     roach.initializeV7UART()
     roach.sendUARTCommand(0x4)
