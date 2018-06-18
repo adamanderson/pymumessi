@@ -37,6 +37,7 @@ LM = LoggingManager()
 logger = LM.get_child_logger(target=args.roachNum,
                              alg_name='initialize',
                              setup=True)
+rootlogger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 LoggingManager.set_console_level('DEBUG')
 

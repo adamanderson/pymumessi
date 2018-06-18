@@ -185,6 +185,23 @@ class LoggingManager(object):
         self.BASIC_FORMAT = '%(asctime)s | %(levelname)s | %(filename)s | %(funcName)s | %(message)s'
         self.logger = logging.getLogger()
 
+        # Configure the root logger
+        root_formatter = DfmuxFormatter(self.BASIC_FORMAT,
+                                        log_colors=log_colors,
+                                        timezone=timezone)
+        console_handler = logging.StreamHandler(sys.stderr)
+        console_handler.setLevel(logging.INFO)
+        console_handler.setFormatter(root_formatter)
+        self.logger.addHandler(console_handler)
+
+        file_console_handler = logging.handlers.TimedRotatingFileHandler('pymumessi.log',
+                                                                         when='midnight',
+                                                                         interval=1,
+                                                                         backupCount=90)
+        file_console_handler.setLevel(logging.INFO)
+        file_console_handler.setFormatter(root_formatter)
+        self.logger.addHandler(file_console_handler)
+        
         # Figure out where we are putting things (for the child-loggers)
         if logdir:
             self.logdir = logdir
@@ -305,10 +322,9 @@ class LoggingManager(object):
                                              log_colors=self.log_colors,
                                              timezone=self.timezone)
             child_file_logger.setFormatter(child_formatter)
-
-            # make the child-logger that hands things up to MainLogger
             child_logger = logging.getLogger('.{0}_{1}'.format(alg_name,
                                                                reduced_target))
+            
             # remove stale handlers:
             for hdlr in child_logger.handlers:
                 child_logger.removeHandler(hdlr)
