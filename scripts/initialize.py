@@ -57,7 +57,7 @@ if 'connect' in args.stages:
     logger.log(level=logging.INFO, msg="Connecting to roach")
     ipaddress = config.get('Roach {}'.format(args.roachNum), 'ipaddress')
     FPGAParamFile = config.get('Roach {}'.format(args.roachNum), 'FPGAParamFile')
-    roachController = Roach2(args.roachNum, args.config, True, False)
+    roachController = Roach2(args.roachNum, args.config, False)
     roachController.connect()
 
 # Program V6

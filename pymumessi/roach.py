@@ -87,7 +87,7 @@ BUGS:
 """
 
 import sys,os,time,datetime,struct,math,calendar
-import warnings, inspect
+import inspect
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.special
@@ -98,11 +98,13 @@ import binascii
 import pickle
 from lib.binTools import castBin
 from lib.readDict import readDict
+import logging
+
+rootlogger = logging.getLogger()
 
 class Roach2:
 
-    def __init__(self, roachNumber, configFile, verbose=False,
-                 debug=False):
+    def __init__(self, roachNumber, configFile, debug=False):
         '''
         Parameters:
         ----------
@@ -110,8 +112,6 @@ class Roach2:
             Number of the roach, corresponding to settings in configFile
         configFile : str
             Path to file with configuration settings for each of the boards and defaults
-        verbose : bool
-            More print statements
         debug : bool
             Saves data to disk for debugging
 
@@ -126,7 +126,6 @@ class Roach2:
         self.FPGAParamFile = self.config.get(self.roachString, 'FPGAParamFile')
         self.ip = self.config.get(self.roachString, 'ipaddress')
 
-        self.verbose=verbose
         self.debug=debug
 
         try:
@@ -159,10 +158,10 @@ class Roach2:
         time.sleep(.1)
         self.fpga._timeout = 50.
         if not self.fpga.is_running():
-            print 'Firmware is not running. Start firmware, calibrate, and load wave into qdr first!'
+            
+            logging.info('Firmware is not running. Start firmware, calibrate, and load wave into qdr first!')
         else:
             self.fpga.get_system_information()
-            #print self.fpga.snapshots
     
     def checkDdsShift(self):
         '''
@@ -187,10 +186,9 @@ class Roach2:
         ddsShift = (ddsShift_initial + dds_ch - data_ch +1) % self.params['nChannelsPerStream']    # have to add 1 here if we use the np.roll in the writeQDR() function
         #ddsShift = (ddsShift_initial + dds_ch - data_ch ) % self.params['nChannelsPerStream'] 
         
-        if self.verbose:
-            print 'current dds lag', ddsShift_initial
-            print 'dds ch',dds_ch
-            print 'fft ch',data_ch
+        logging.debug('current dds lag: {}'.format(ddsShift_initial))
+        logging.debug('dds ch: {}'.format(dds_ch))
+        logging.debug('fft ch: {}'.format(data_ch))
         
         return ddsShift
     
@@ -202,8 +200,7 @@ class Roach2:
             ddsShift - # clock cycles
         '''
         self.fpga.write_int(self.params['ddsShift_reg'],ddsShift)
-        if self.verbose:
-            print 'dds lag: ',ddsShift
+        logging.debug('dds lag: {}'.format(ddsShift))
         return ddsShift
 
     def loadBoardNum(self, boardNum=None):
@@ -347,8 +344,7 @@ class Roach2:
         if not hasattr(self,'LOFreq'):
             raise ValueError("Need to set LO freq by calling setLOFreq()")
         
-        if self.verbose:
-            print "Generating Dds Tones..."
+        logging.debug("Generating Dds Tones...")
         # quantize resonator tones to dds resolution
         # first figure out the actual frequencies being made by the DAC
         dacFreqList = freqChannels-self.LOFreq
@@ -414,14 +410,16 @@ class Roach2:
         self.ddsIStreamsList = iStreamList
         self.ddsQStreamsList = qStreamList
         
-        if self.verbose:
-            print '\tDDS freqs: '+str(self.ddsQuantizedFreqList)
-            for i in range(nStreams):
-                print '\tStream '+str(i)+' I vals: '+str(self.ddsIStreamsList[i])
-                print '\tStream '+str(i)+' Q vals: '+str(self.ddsQStreamsList[i])
-            print '...Done!'
+        logging.debug('\tDDS freqs: {}'.format(self.ddsQuantizedFreqList))
+        for i in range(nStreams):
+            logging.debug('\tStream {} I vals: {}'.format(i, self.ddsIStreamsList[i]))
+            logging.debug('\tStream {} Q vals: {}'.format(i, self.ddsQStreamsList[i]))
+        logging.debug('...Done!')
         
-        return {'iStreamList':iStreamList, 'qStreamList':qStreamList, 'quantizedFreqList':ddsQuantizedFreqList, 'phaseList':phaseList}
+        return {'iStreamList':iStreamList,
+                'qStreamList':qStreamList,
+                'quantizedFreqList':ddsQuantizedFreqList,
+                'phaseList':phaseList}
     
     
     def loadDdsLUT(self, ddsToneDict=None):
@@ -440,11 +438,10 @@ class Roach2:
             try:
                 ddsToneDict={'iStreamList':self.ddsIStreamsList,'qStreamList':self.ddsQStreamsList}
             except AttributeError:
-                print "Need to run generateDdsTones() first!"
+                logging.error("Need to run generateDdsTones() first!")
                 raise
         
-        if self.verbose:
-            print "Loading DDS LUT..."
+        logging.debug("Loading DDS LUT...")
         
         self.fpga.write_int(self.params['read_dds_reg'],0) #do not read from qdr while writing
         memNames = self.params['ddsMemName_regs']
@@ -460,7 +457,7 @@ class Roach2:
                               'earlierSampleIsMsb':True}
             memVals = self.formatWaveForMem(**formatWaveparams)
             allMemVals.append(memVals)
-            if self.verbose: print "\twriting QDR for Stream",iMem
+            logging.debug("\twriting QDR for Stream {}".format(iMem))
             writeQDRparams={'memName':memNames[iMem],
                             'valuesToWrite':memVals[:,0],
                             'start':0,
@@ -471,7 +468,7 @@ class Roach2:
             
         self.fpga.write_int(self.params['read_dds_reg'],1)
         
-        if self.verbose: print "...Done!"
+        logging.debug("...Done!")
         
         return allMemVals
     
@@ -563,7 +560,7 @@ class Roach2:
             try:
                 combDict = {'I':np.real(self.dacFreqComb).astype(np.int), 'Q':np.imag(self.dacFreqComb).astype(np.int), 'quantizedFreqList':self.dacQuantizedFreqList}
             except AttributeError:
-                print "Run generateDacComb() first!"
+                logging.error("Run generateDacComb() first!")
                 raise
 
         #Format comb for onboard memory
@@ -580,7 +577,7 @@ class Roach2:
             self.v7_ready = self.fpga.read_int(self.params['v7Ready_reg'])
 
         if(self.v7_ready == self.params['v7Err']):
-            warnings.warn('MicroBlaze did not properly execute last command.  Proceed with caution...')
+            logging.warning('MicroBlaze did not properly execute last command.  Proceed with caution...')
             
         self.v7_ready = 0
         self.fpga.write_int(self.params['inByteUART_reg'],self.params['mbRecvDACLUT'])
@@ -593,8 +590,7 @@ class Roach2:
 
                 
         num_lut_dumps = int(math.ceil(len(memVals)*2/self.lut_dump_buffer_size)) #Each value in memVals is 2 bytes
-        if self.verbose:
-            print 'num lut dumps ' + str(num_lut_dumps)
+        logging.debug('num lut dumps {}'.format(num_lut_dumps))
         
         sending_data = 1 #indicates that ROACH2 is still sending LUT
                
@@ -606,9 +602,8 @@ class Roach2:
             
             iqList = iqList.astype(np.int16)
             toWriteStr = struct.pack('<{}{}'.format(len(iqList), 'h'), *iqList)
-            if self.verbose:
-                print 'bram dump # ' + str(i),'\r',
-                sys.stdout.flush()
+            logging.debug('bram dump # {}\r'.format(i))
+            sys.stdout.flush()
             while(sending_data):
                 sending_data = self.fpga.read_int(self.params['lutDumpBusy_reg'])
             self.fpga.blindwrite(self.params['lutBramAddr_reg'],toWriteStr,0)
@@ -623,7 +618,6 @@ class Roach2:
                 raise Exception('Microblaze not ready to recieve LUT!')
 
             self.fpga.write_int(self.params['txEnUART_reg'],1)
-            #print 'enable write'
             time.sleep(0.05)
             self.fpga.write_int(self.params['txEnUART_reg'],0)
             sending_data = 1
@@ -654,7 +648,7 @@ class Roach2:
             try:
                 LOFreq = self.LOFreq/1e6 #IF board uses MHz
             except AttributeError:
-                print "Run setLOFreq() first!"
+                logging.error("Run setLOFreq() first!")
                 raise        
        
         loFreqInt = int(LOFreq)
@@ -730,7 +724,7 @@ class Roach2:
             try:
                 LOFreq = self.LOFreq/1e6 #IF board uses MHz
             except AttributeError:
-                print "Run setLOFreq() first!"
+                logging.error("Run setLOFreq() first!")
                 raise        
        
         if not len(regList)==7:
@@ -774,9 +768,7 @@ class Roach2:
             time.sleep(0.001)
             self.fpga.write_int(self.params['txEnUART_reg'],0)
         
-        #print 'loFreqFrac' + str(loFreqFrac)	
         loFreqFrac = int(loFreqFrac*(2**16))
-        #print 'loFreqFrac' + str(loFreqFrac)
         
         # same as transfer of int bytes
         for i in range(2):
@@ -814,8 +806,7 @@ class Roach2:
         """
         scaleInt = scale*(2**self.params['adcScaleBinPt'])
         scaleInt = int(scaleInt)
-        if self.verbose:
-            print 'setting adc scale to',(scaleInt / 2.**self.params['adcScaleBinPt'])
+        logging.error('setting adc scale to {}'.format((scaleInt / 2.**self.params['adcScaleBinPt'])))
         self.fpga.write_int(self.params['adcScale_reg'],scaleInt)
 
     
@@ -960,8 +951,7 @@ class Roach2:
         self.attenList = resAttenList
         self.freqList = freqList
         
-        if self.verbose:
-            print 'Generating DAC comb...'
+        logging.error('Generating DAC comb...')
         
         # Calculate relative amplitudes for DAC LUT
         nBitsPerSampleComponent = self.params['nBitsPerSamplePair']/2
@@ -997,12 +987,15 @@ class Roach2:
         highestVal = np.max((np.abs(iValues).max(),np.abs(qValues).max()))
         expectedHighestVal_sig = scipy.special.erfinv((len(iValues)-0.1)/len(iValues))*np.sqrt(2.)   # 10% of the time there should be a point this many sigmas higher than average
 
-        if self.verbose:
-            print '\tUsing '+str(1.0*highestVal/maxAmp*100)+' percent of DAC dynamic range'
-            print '\thighest: '+str(highestVal)+' out of '+str(maxAmp)
-            print '\tsigma_I: '+str(np.std(iValues))+' sigma_Q: '+str(np.std(qValues))
-            print '\tLargest val_I: '+str(1.0*np.abs(iValues).max()/np.std(iValues))+' sigma. Largest val_Q: '+str(1.0*np.abs(qValues).max()/np.std(qValues))+' sigma.'
-            print '\tExpected val: '+str(expectedHighestVal_sig)+' sigmas'
+        logging.debug('\tUsing {} percent of DAC dynamic range'
+                      .format(1.0*highestVal/maxAmp*100))
+        logging.debug('\thighest: {} out of {}'.format(highestVal, maxAmp))
+        logging.debug('\tsigma_I: {} sigma_Q: {}'+format(iValues, qValues))
+        logging.debug('\tLargest val_I: {} sigma. Largest val_Q: {} sigma.'
+                      .format(1.0*np.abs(iValues).max()/np.std(iValues),
+                              1.0*np.abs(qValues).max()/np.std(qValues)))
+        logging.debug('\tExpected val: {} sigmas'
+                      .format(expectedHighestVal_sig))
             
         if highestVal > expectedHighestVal_sig*np.max((np.std(iValues),np.std(qValues))):
             warnings.warn("The freq comb's relative phases may have added up sub-optimally. You should calculate new random phases")
@@ -1013,8 +1006,7 @@ class Roach2:
             # all amplitudes in DAC less than 1 dB below max allowed by dynamic range
             warnings.warn("DAC Dynamic range not fully utilized. Increase global attenuation by: "+str(int(np.floor(20.*np.log10(1.0*maxAmp/highestVal))))+' dB')
         
-        if self.verbose:
-            print '...Done!'
+        logging.debug('...Done!')
 
         return {'I':iValues,'Q':qValues,'quantizedFreqList':self.dacQuantizedFreqList}
         
@@ -1091,16 +1083,15 @@ class Roach2:
         if order not in ['F','C','A','stream']:  #if invalid, grab default value
             args,__,__,defaults = inspect.getargspec(Roach2Controls.generateResonatorChannels)
             order = defaults[args.index('order')-len(args)]
-            if self.verbose: print "Invalid 'order' parameter for generateResonatorChannels(). Changed to default: "+str(order)
+            logging.debug("Invalid 'order' parameter for generateResonatorChannels(). Changed to default: {}".format(order))
         if len(np.array(freqList))>self.params['nChannels']:
-            warnings.warn("Too many freqs provided. Can only accommodate "+str(self.params['nChannels'])+" resonators")
+            logging.warning("Too many freqs provided. Can only accommodate {} resonators".format(self.params['nChannels']))
             freqList = freqList[:self.params['nChannels']]
         self.freqList = np.ravel(freqList)
         if len(np.unique(self.freqList)) != len(self.freqList):
             raise ValueError
         self.freqChannels = self.freqList
-        if self.verbose:
-            print 'Generating Resonator Channels...'
+        logging.debug('Generating Resonator Channels...')
         
         #Pad with freq = -1 so that freqChannels's length is a multiple of nStreams
         nStreams = int(self.params['nChannels']/self.params['nChannelsPerStream'])        #number of processing streams. For Gen 2 readout this should be 4
@@ -1133,9 +1124,8 @@ class Roach2:
             self.freqChannelToStreamChannel[i] = np.asarray([int(ch_i),int(stream_i)])
             self.streamChannelToFreqChannel[ch_i,stream_i]=i
         
-        if self.verbose:
-            print '\tFreq Channels: ',self.freqChannels
-            print '...Done!'
+            logging.debug('\tFreq Channels: {}'.format(self.freqChannels))
+            logging.debug('...Done!')
 
         return self.freqChannels
         
@@ -1158,11 +1148,10 @@ class Roach2:
             try:
                 freqChannels = self.freqChannels
             except AttributeError:
-                print "Run generateResonatorChannels() first!"
+                logging.error("Run generateResonatorChannels() first!")
                 raise
         freqChannels = np.asarray(freqChannels)
-        if self.verbose:
-            print "Finding FFT Bins..."
+        logging.debug("Finding FFT Bins...")
         
         #The frequencies seen by the fft block are actually from the DAC, up/down converted by the IF board, and then digitized by the ADC
         dacFreqChannels = (freqChannels-self.LOFreq)
@@ -1178,9 +1167,8 @@ class Roach2:
         
         self.fftBinIndChannels = self.fftBinIndChannels.astype(np.int)
         
-        if self.verbose:
-            print '\tfft bin indices: ',self.fftBinIndChannels
-            print '...Done!'
+        logging.debug('\tfft bin indices: ',self.fftBinIndChannels)
+        logging.debug('...Done!')
         
         return self.fftBinIndChannels
 
@@ -1198,11 +1186,11 @@ class Roach2:
             try:
                 fftBinIndChannels = self.fftBinIndChannels
             except AttributeError:
-                print "Run generateFftChanSelection() first!"
+                logging.error("Run generateFftChanSelection() first!")
                 raise
         
         nStreams = self.params['nChannels']/self.params['nChannelsPerStream']
-        if self.verbose: print 'Configuring chan_sel block...\n\tCh: Stream'+str(range(len(fftBinIndChannels[0])))
+        logging.debug('Configuring chan_sel block...\n\tCh: Stream {}'.format(range(len(fftBinIndChannels[0]))))
         for row in range(self.params['nChannelsPerStream']):
             try:
                 fftBinInds = fftBinIndChannels[row]
@@ -1210,10 +1198,14 @@ class Roach2:
                 fftBinInds = np.asarray([self.fftBinPadValue]*nStreams)
             self.loadSingleChanSelection(selBinNums=fftBinInds,chanNum=row)
         
-        if self.verbose: print '...Done!'
+        logging.debug('...Done!')
         if self.debug:
-            np.savetxt(self.params['debugDir']+'freqChannels.txt', self.freqChannels/10**9.,fmt='%2.25f',header="2D Array of MKID frequencies [GHz]. \nEach column represents a stream and each row is a channel")
-            np.savetxt(self.params['debugDir']+'fftBinIndChannels.txt', self.fftBinIndChannels,fmt='%8i',header="2D Array of fftBin Indices. \nEach column represents a stream and each row is a channel")
+            np.savetxt(self.params['debugDir']+'freqChannels.txt',
+                       self.freqChannels/10**9.,fmt='%2.25f',
+                       header="2D Array of MKID frequencies [GHz]. \nEach column represents a stream and each row is a channel")
+            np.savetxt(self.params['debugDir']+'fftBinIndChannels.txt',
+                       self.fftBinIndChannels,fmt='%8i',
+                       header="2D Array of fftBin Indices. \nEach column represents a stream and each row is a channel")
         
     def loadSingleChanSelection(self,selBinNums,chanNum=0):
         """
@@ -1243,7 +1235,7 @@ class Roach2:
 
         self.fpga.write_int(self.params['chanSelLoad_reg'],0) #stop loading
         
-        if self.verbose: print '\t'+str(chanNum)+': '+str(selBinNums)+'\r',
+        logging.debug('\t{}: {}\r'.format(chanNum, selBinNums))
         sys.stdout.flush()
     
     def getStreamChannelFromFreqChannel(self,freqCh=None):
@@ -1291,7 +1283,7 @@ class Roach2:
             try:
                 self.fpga.write_int(reg,cpsLimit)
             except:
-                print "Couldn't write to", reg
+                logging.error("Couldn't write to {}".format(reg))
     
     def setThreshByFreqChannel(self,thresholdRad = -.1, freqChannel=0):
         """
@@ -1330,10 +1322,9 @@ class Roach2:
         #format these paramters as fix18_16 values to be loaded to registers
         binBaseKf=castBin(baseKf,quantization='Round',nBits=18,binaryPoint=16,format='uint')
         binBaseKq=castBin(baseKq,quantization='Round',nBits=18,binaryPoint=16,format='uint')
-        if self.verbose:
-            print 'threshold',thresholdRad,binThreshold
-            print 'Kf:',baseKf,binBaseKf
-            print 'Kq:',baseKq,binBaseKq
+        logging.debug('threshold {} {}'.format(thresholdRad,binThreshold))
+        logging.debug('Kf: {}'.format(baseKf,binBaseKf))
+        logging.debug('Kq: {}'.format(baseKq,binBaseKq))
         #load the values in
         self.fpga.write_int(self.params['captureBasekf_regs'][stream],binBaseKf)
         self.fpga.write_int(self.params['captureBasekq_regs'][stream],binBaseKq)
@@ -1388,7 +1379,7 @@ class Roach2:
                     if ch in np.atleast_1d(ch_stream):
                         ch_freq = int(np.atleast_1d(ch_freqs)[np.where(np.atleast_1d(ch_stream)==ch)])     # The freq channel of the resonator corresponding to ch/stream
                         toWriteStr = struct.pack('>{}{}'.format(len(firInts[ch_freq]),'l'), *firInts[ch_freq])
-                        print ' ch:'+str(ch_freq)+' ch/stream: '+str(ch)+'/'+str(stream)
+                        logging.info('{} Hz: ch/stream: {}/{}'+str(stream).format(ch_freq, ch, stream))
                     else:
                         toWriteStr=zeroWriteStr
                     self.fpga.blindwrite(self.params['firTapsMem_regs'][stream], toWriteStr,0)
@@ -1398,7 +1389,7 @@ class Roach2:
                     time.sleep(.001)
                     self.fpga.write_int(self.params['firLoadChan_regs'][stream],0)
             except:
-                print 'Failed to write FIRs on stream '+str(stream)     # Often times test firmware only implements stream 0
+                logging.error('Failed to write FIRs on stream {}'.format(stream))     # Often times test firmware only implements stream 0
                 if stream==0: raise
 
     def takePhaseSnapshotOfFreqChannel(self, freqChan):
@@ -1410,7 +1401,8 @@ class Roach2:
         '''
         ch, stream = self.getStreamChannelFromFreqChannel(freqChan)
         selChanIndex = (int(stream)<<8) + int(ch)
-        print "Taking phase snap from ch/stream:",str(ch),'/',str(stream),' selChanIndex:',str(selChanIndex)
+        logging.info("Taking phase snap from ch/stream: {} / {} selChanIndex: {}"
+                     .format(ch, stream, selChanIndex))
         return self.takePhaseSnapshot(selChanIndex)
     
     def takePhaseSnapshot(self, selChanIndex):
@@ -1545,23 +1537,22 @@ class Roach2:
             self.phaseTimeStreamData - phase packet data. See parsePhaseStream()
         """
 
-        if self.verbose:
-            print 'host ' + host
-            print 'port ' + str(port)
-            print 'duration ' + str(duration)
+        logging.debug('host {}'.format(host))
+        logging.debug('port {}'.format(port))
+        logging.debug('duration {}'.format(duration))
 
         # create dgram udp socket
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         except socket.error:
-            print 'Failed to create socket'
+            logging.error('Failed to create socket')
             raise
 
         # Bind socket to local host and port
         try:
             sock.bind((host, port))
         except socket.error , msg:
-            print 'Bind failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
+            logging.error('Bind failed. Error Code : {} Message {}'.format(msg[0], msg[1]))
             sock.close()
             raise
         
@@ -1578,11 +1569,9 @@ class Roach2:
                 frame = sock.recvfrom(bufferSize)
                 frameData += frame[0]
                 iFrame += 1
-                if self.verbose and iFrame%1000==0:
-                    print iFrame
 
         except KeyboardInterrupt:       
-            print 'Exiting'
+            logging.error('Exiting')
             sock.close()
             self.phaseTimeStreamData = frameData
             return
@@ -1629,12 +1618,10 @@ class Roach2:
         """
         
         self.startPhaseStream(selChanIndex, pktsPerFrame, fabric_port, hostIP )
-        if self.verbose:
-            print "Collecting phase time stream..."
+        logging.debug("Collecting phase time stream...")
         phaseTimeStreamData=self.recvPhaseStream(selChanIndex, duration, pktsPerFrame, hostIP, fabric_port)
         self.stopStream()
-        if self.verbose:
-            print "...Done!"
+        logging.debug("...Done!")
         
         return self.parsePhaseStream(phaseTimeStreamData,pktsPerFrame)
         
@@ -1740,8 +1727,7 @@ class Roach2:
         self.fpga.write_int(self.params['iqSnpStart_reg'],0)        
         
         for i in range(len(LOFreqs)):
-            if self.verbose:
-                print 'Sweeping LO ' + str(LOFreqs[i]) + ' MHz'
+            logging.debug('Sweeping LO {} MHz'.format(LOFreqs[i]))
             self.loadLOFreq(LOFreqs[i])
             if(i%2==0):
                 for stream in range(nStreams):
@@ -1829,8 +1815,7 @@ class Roach2:
         iqPt = np.empty([nStreams,self.params['nChannelsPerStream']*4])
         
         for i in counter:
-            if self.verbose:
-                print 'IQ point #' + str(i)
+            logging.debug('IQ point # {}'.format(i))
             if(i%2==0):
                 for stream in range(nStreams):
                     self.fpga.snapshots[self.params['iqSnp_regs'][stream]].arm(man_valid = False, man_trig = False) 
@@ -1897,14 +1882,14 @@ class Roach2:
         Loads the resonator freq files (and attenuations, resIDs)                                                                                          divides the resonators into streams
         '''
         try:
-            print 'old Freq: ', self.roachController.freqList
+            logging.info('old Freq: {}'.format(self.roachController.freqList))
         except: pass
         fn = self.config.get(self.roachString,'freqfile')
         fn2=fn.rsplit('.',1)[0]+'_NEW.'+ fn.rsplit('.',1)[1]         # Check if ps_freq#_NEW.txt exists
-        print "RoachStateMachine.loadFreq:  fn,fn2=",fn,fn2
+        logging.info("RoachStateMachine.loadFreq:  fn, fn2 = {}, {}".format(fn,fn2))
         if os.path.isfile(fn2):
             fn=fn2
-            print 'Loading freqs from '+fn
+            logging.info('Loading freqs from {}'.format(fn))
 
         freqFile = np.loadtxt(fn)
 
@@ -1933,14 +1918,16 @@ class Roach2:
         phaseOffsList = iqRatioList[argsSorted]
         iqRatioList = iqRatioList[argsSorted]
         for i in range(len(freqs)):
-            print i, resIDs[i], freqs[i], attens[i], phaseOffsList[i], iqRatioList[i]
+            logging.info('{} {} {} {} {} {}'.format(i, resIDs[i], freqs[i],
+                                                    attens[i], phaseOffsList[i],
+                                                    iqRatioList[i]))
 
         self.generateResonatorChannels(freqs)
         self.attenList = attens
         self.resIDs = resIDs
         self.phaseOffsList = phaseOffsList
         self.iqRatioList = iqRatioList
-        print 'new Freq: ', self.freqList
+        logging.info('new Freq: {}'.format(self.freqList))
 
         return True
 
@@ -1979,15 +1966,15 @@ class Roach2:
         dacComb = self.generateDacComb(globalDacAtten=dacAtten)
         with open("dacComb.pkl", 'wb') as handle:
             pickle.dump(dacComb, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        print "Initializing ADC/DAC board communication"
+        logging.info("Initializing ADC/DAC board communication")
         self.initializeV7UART()
-        print "Setting Attenuators"
+        logging.info("Setting Attenuators")
         self.changeAtten(1,dacAtten1)
         self.changeAtten(2,dacAtten2)
         self.changeAtten(3,adcAtten)
-        print "Setting LO Freq"
+        logging.info("Setting LO Freq")
         self.loadLOFreq()
-        print "Loading DAC LUT"
+        logging.info("Loading DAC LUT")
         self.loadDacLUT()
         return True
 
