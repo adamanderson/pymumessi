@@ -1943,8 +1943,6 @@ class Roach2:
         self.setLOFreq(loFreq)
         self.generateFftChanSelection()
         ddsTones = self.generateDdsTones()
-        with open("ddsTones.pkl", 'wb') as handle:
-            pickle.dump(ddsTones, handle, protocol=pickle.HIGHEST_PROTOCOL)
         self.loadChanSelection()
         self.loadDdsLUT()
         return True
@@ -1964,8 +1962,6 @@ class Roach2:
         dacAtten2 = np.ceil(dacAtten*2)/4.
 
         dacComb = self.generateDacComb(globalDacAtten=dacAtten)
-        with open("dacComb.pkl", 'wb') as handle:
-            pickle.dump(dacComb, handle, protocol=pickle.HIGHEST_PROTOCOL)
         logging.info("Initializing ADC/DAC board communication")
         self.initializeV7UART()
         logging.info("Setting Attenuators")
