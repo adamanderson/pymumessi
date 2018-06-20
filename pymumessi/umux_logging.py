@@ -57,12 +57,11 @@ import sys
 import os
 import copy
 import time
-import datetime
+from datetime import datetime
 import warnings
 import pymumessi
 
 # add a NOTICE logging level
-
 logging.NOTICE = 25
 logging.addLevelName(logging.NOTICE, 'NOTICE')
 
@@ -85,70 +84,6 @@ def root_notice(msg, *args, **kwargs):
 
 logging.notice = root_notice
 
-# timezone handling, independent of logging yaml
-# because that config doesn't understand extra options
-
-def _get_timezone(timezone):
-    """Convert input to datetime.tzinfo object for formatting
-    timestamps.  Argument can be a string timezone name or a
-    specific tzinfo instance.  If None or 'local', returns the
-    local timezone if found."""
-
-    # explicit timezone specified as tzinfo object
-    if isinstance(timezone, datetime.tzinfo):
-        return timezone
-
-    try:
-        import pytz
-    except ImportError:
-        has_pytz = False
-    else:
-        has_pytz = True
-
-    if str(timezone).lower() == 'local':
-        timezone = None
-
-    # explicit timezone specified as string name
-    if timezone:
-        # can't handle timezones
-        if not has_pytz:
-            return None
-        return pytz.timezone(timezone)
-
-    # no timezone specified, use local if possible
-    try:
-        import tzlocal
-    except ImportError:
-        if not has_pytz:
-            return None
-        try:
-            with open('/etc/localtime', 'rb') as f:
-                return pytz.tzfile.build_tzinfo('local', f)
-        except IOError:
-            return None
-    else:
-        return tzlocal.get_localzone()
-
-# default to UTC time
-_logging_timezone = _get_timezone('UTC')
-
-def set_logging_timezone(timezone):
-    """
-    Set the global default timezone for data output directories and
-    log entries.
-
-    Options are:
-
-    'UTC' : universal time (default)
-    'local' or None : attempt to figure out the system's local timezone
-        NB: this is best used with the `tzlocal` python package.
-    string name : a known timezone string name, e.g. 'US/Eastern'
-    datetime.tzinfo instance: an existing timezone object
-    """
-    global _logging_timezone
-    _logging_timezone = _get_timezone(timezone)
-
-
 class LoggingManager(object):
     """A custom class that makes the MainLogger and childlogging objects,
     adds default handlers for the console and file_logging, and defines the basic
@@ -164,11 +99,6 @@ class LoggingManager(object):
             to child DfmuxFormatter instances.  If None, the default log colors
             are used.
 
-        timezone: the timezone to be used for data output directory timestamps
-            and log file entries.  Can be 'UTC', 'local', a string timezone name
-            or `datetime.tzinfo` instance. If None, the global pydfmux default
-            is used.
-
     Examples:
         >>> import pydfmux.core.utils.logging_utils as LU
         >>> LM = LU.LoggingManager()
@@ -180,15 +110,14 @@ class LoggingManager(object):
         >>>     '2014-07-28 17:24:17 | INFO | MACRO | INPUT_FILE.py | INPUT_MODULE | 'TARGET_OBJECT' | This is a logging message | extra_field_key: extra_field_value'
         """
 
-    def __init__(self, logdir='', log_colors=None, timezone=None):
+    def __init__(self, logdir='', log_colors=None):
 
-        self.BASIC_FORMAT = '%(asctime)s | %(levelname)s | %(filename)s | %(funcName)s | %(message)s'
+        self.BASIC_FORMAT = '%(asctime)-15s | %(levelname)s | %(filename)s | %(funcName)s | %(message)s'
         self.logger = logging.getLogger()
 
         # Configure the root logger
         root_formatter = DfmuxFormatter(self.BASIC_FORMAT,
-                                        log_colors=log_colors,
-                                        timezone=timezone)
+                                        log_colors=log_colors)
         console_handler = logging.StreamHandler(sys.stderr)
         console_handler.setLevel(logging.INFO)
         console_handler.setFormatter(root_formatter)
@@ -214,19 +143,7 @@ class LoggingManager(object):
             os.makedirs(self.logdir, mode=0o0777)
             os.chmod(self.logdir, 0o0777)
 
-        # deal with timezones in timestamped file paths
-        # overload the default timestamp converter function
-        # to one that is timezone-aware
-        self.timezone = timezone
-        if self.timezone is None:
-            self.converter = lambda x: datetime.datetime.fromtimestamp(
-                x, _logging_timezone)
-        else:
-            self.timezone = _get_timezone(self.timezone)
-            self.converter = lambda x: datetime.datetime.fromtimestamp(
-                x, self.timezone)
-
-        self.day_path = self.converter(time.time()).strftime('%Y%m%d')
+        self.day_path = datetime.utcnow().strftime('%Y%m%d')
         self.log_colors = log_colors
 
     def setup_child_loggers(self, targets, alg_name,
@@ -267,15 +184,12 @@ class LoggingManager(object):
         extra_fields = copy.deepcopy(extra_field_dict or {})
 
         extra_fields['macro'] = alg_name
-        ut_time = self.converter(time.time()).strftime('%Y%m%d_%H%M%S')
+        # ut_time = self.converter(time.time()).strftime('%Y%m%d_%H%M%S')
+        ut_time = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
         if custom_path:
             alg_dir = custom_path
 
         else:
-            # # fall back to global default if not supplied
-            # if dir_suffix is None:
-            #     dir_suffix = _logging_dir_suffix
-
             if dir_suffix is None:
                 alg_dir = os.path.join(self.logdir, self.day_path,
                                         "{0}_{1}".format(ut_time, alg_name))
@@ -319,8 +233,7 @@ class LoggingManager(object):
 
             child_formatter = DfmuxFormatter(self.BASIC_FORMAT,
                                              extra_fields=extra_fields,
-                                             log_colors=self.log_colors,
-                                             timezone=self.timezone)
+                                             log_colors=self.log_colors)
             child_file_logger.setFormatter(child_formatter)
             child_logger = logging.getLogger('.{0}_{1}'.format(alg_name,
                                                                reduced_target))
@@ -469,11 +382,6 @@ class DfmuxFormatter(logging.Formatter):
         extra_fields: A dictionary with extra fields to add to the logging message
             and format string. Usually called from within the get_child_logger
             instantiation. Default: {}
-
-        timezone: the timezone to be used for data output directory timestamps
-            and log file entries.  Can be 'UTC', 'local', a string timezone name
-            or `datetime.tzinfo` instance. If None, the global pydfmux default
-            is used.
     """
 
     default_log_colors = {
@@ -485,8 +393,10 @@ class DfmuxFormatter(logging.Formatter):
         'CRITICAL': 'bold_red',
     }
 
-    def __init__(self, format, datefmt='%Y-%m-%d %H:%M:%S %Z',
-                 log_colors=None, extra_fields={}, timezone=None):
+    converter = time.gmtime
+
+    def __init__(self, format, datefmt='%Y-%m-%d %H:%M:%S',
+                 log_colors=None, extra_fields={}):
         """Initialization of the DfmuxFormatter subclass -- builds escape codes
         and colors.
         """
@@ -535,29 +445,6 @@ class DfmuxFormatter(logging.Formatter):
             super(DfmuxFormatter, self).__init__(format, datefmt)
         else:
             logging.Formatter.__init__(self, format, datefmt)
-
-        # deal with timezones in file timestamps
-        # overload the default timestamp converter function
-        # to one that is timezone-aware
-        self.timezone = timezone
-        if self.timezone is None:
-            self.converter = lambda x: datetime.datetime.fromtimestamp(
-                x, _logging_timezone)
-        else:
-            self.timezone = _get_timezone(self.timezone)
-            self.converter = lambda x: datetime.datetime.fromtimestamp(
-                x, self.timezone)
-
-    def formatTime(self, record, datefmt=None):
-        """Overridden baseclass method for formatting timestamps with timezones."""
-
-        ct = self.converter(record.created)
-
-        if datefmt:
-            s = ct.strftime(datefmt).strip()
-        else:
-            s = ct.strftime('%Y-%m-%d %H:M:%S.{} %z').strip().format(record.msecs)
-        return s
 
     def format(self, record):
         """Overridden baseclass method that applies the escape codes and
