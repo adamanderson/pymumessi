@@ -53,12 +53,12 @@ Examples:
     >>>     '2014-07-28 17:24:17 | INFO | MACRO | INPUT_FILE.py | INPUT_MODULE | 'TARGET_OBJECT' | This is a logging message | extra_field_key: extra_field_value'"""
 
 import logging
+from logging import handlers
 import sys
 import os
 import copy
 import time
 from datetime import datetime
-import warnings
 import pymumessi
 
 # add a NOTICE logging level
@@ -123,10 +123,10 @@ class LoggingManager(object):
         console_handler.setFormatter(root_formatter)
         self.logger.addHandler(console_handler)
 
-        file_console_handler = logging.handlers.TimedRotatingFileHandler('pymumessi.log',
-                                                                         when='midnight',
-                                                                         interval=1,
-                                                                         backupCount=90)
+        file_console_handler = handlers.TimedRotatingFileHandler('pymumessi.log',
+                                                                 when='midnight',
+                                                                 interval=1,
+                                                                 backupCount=90)
         file_console_handler.setLevel(logging.INFO)
         file_console_handler.setFormatter(root_formatter)
         self.logger.addHandler(file_console_handler)
@@ -299,11 +299,11 @@ class LoggingManager(object):
                                     extra_field_dict=extra_fields)
         childlogger = logging.getLogger('.{0}_{1}'.format(alg_name, reduced_target))
         if not childlogger.handlers:
-            warnings.warn("Returning a ChildLogger object with no handlers. "
-                          "If you used setup_child_loggers(), the alg_name may "
-                          "not match the one given then. "
-                          "Alternatively, get_child_logger() can be called on its"
-                          "own with 'setup=True'")
+            self.logger.warn("Returning a ChildLogger object with no handlers. "
+                             "If you used setup_child_loggers(), the alg_name may "
+                             "not match the one given then. "
+                             "Alternatively, get_child_logger() can be called on its"
+                             "own with 'setup=True'")
         return childlogger
 
     @staticmethod
