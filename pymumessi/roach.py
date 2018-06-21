@@ -122,10 +122,11 @@ class Roach2:
 
         self.config = ConfigParser.ConfigParser()
         self.config.read(configFile)
-        self.roachString = 'Roach ' + "%d" % roachNumber
+        self.roachString = 'Roach {:d}'.format(roachNumber)
         self.FPGAParamFile = self.config.get(self.roachString, 'FPGAParamFile')
         self.ip = self.config.get(self.roachString, 'ipaddress')
-
+        self.port = int(self.config.get(self.roachString, 'port'))
+        
         self.debug=debug
 
         try:
@@ -150,6 +151,16 @@ class Roach2:
         self.originalDdsShift = self.checkDdsShift()
         self.newDdsShift = self.loadDdsShift(self.originalDdsShift)
 
+        # load the frequencies
+        freq_filename = self.config.get(self.roachString, 'freqfile')
+        freq_data = np.loadtxt(freq_filename)
+        self.resonator_ids = np.atleast_1d(freq_data[:,0])
+        self.frequencies = np.atleast_1d(freq_data[:,1])
+        self.attenuations = np.atleast_1d(freq_data[:,2])
+
+        # construct the channel information
+        self.generate_resonator_channels(self.frequencies)
+        
     def connect(self):
         try:
             self.fpga = casperfpga.casperfpga.CasperFpga(self.ip,timeout=30.)
@@ -1061,7 +1072,7 @@ class Roach2:
         return {'I':np.asarray(iValList),'Q':np.asarray(qValList),'quantizedFreqList':quantizedFreqList,'phaseList':phaseList}
         
         
-    def generateResonatorChannels(self, freqList,order='F'):
+    def generate_resonator_channels(self, freqList, order='F'):
         """
         Algorithm for deciding which resonator frequencies are assigned to which stream and channel number.
         This is used to define the dds LUTs and calculate the fftBin index for each freq to set the appropriate chan_sel block
@@ -1116,20 +1127,112 @@ class Roach2:
         #Split up to assign channel numbers
         self.freqChannels = np.reshape(self.freqChannels,(-1,nStreams),order)
         
-        # Make indexer arrays
-        self.freqChannelToStreamChannel=np.zeros((len(self.freqList),2),dtype=np.int)
-        self.streamChannelToFreqChannel=np.zeros(self.freqChannels.shape,dtype=np.int)-1
-        for i in range(len(self.freqList)):
-            ch_i,stream_i = np.where(self.freqChannels==self.freqList[i])
-            self.freqChannelToStreamChannel[i] = np.asarray([int(ch_i),int(stream_i)])
-            self.streamChannelToFreqChannel[ch_i,stream_i]=i
-        
+        # Make arrays useful for conversions between channel nomenclature.
+        # Probably can and should replace this with hardware map machinery,
+        # but I've made a temporary cleanup of this for intermediate testing
+        # purposes. I didn't change the logic significantly here, which is
+        # admittedly pretty crappy.
+        self.frequency_index = np.arange(len(self.freqList))
+        self.channel_num = np.zeros(len(self.freqList))
+        self.stream_num = np.zeros(len(self.freqList))
+        for jfreq in range(len(self.freqList)):
+            self.channel_num[jfreq], self.stream_num[jfreq] = \
+                np.where(self.freqChannels == self.freqList[jfreq])
+            
             logging.debug('\tFreq Channels: {}'.format(self.freqChannels))
             logging.debug('...Done!')
 
         return self.freqChannels
         
-        
+    def get_stream_num(self, frequency=None, frequency_index=None):
+        '''
+        Gets a stream number from a frequency value or frequency index
+        (accepts only one of these arguments, not both).
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency in Hz
+        frequency_index : int
+            Index of frequency in sorted list of all frequencies
+
+        Returns
+        -------
+        stream_num : int
+            Stream number of channel
+        '''
+        if (frequency == None and frequency_index == None) or \
+           (frequency != None and frequency_index != None):
+            raise ValueError('Exactly one keyword argument is required: frequency or frequency_index')
+
+        if frequency != None:
+            return self.stream_num[self.freqList == frequency]
+        elif frequency_index != None:
+            return self.stream_num[self.frequency_index == frequency_index]
+
+    def get_channel_num(self, frequency=None, frequency_index=None):
+        '''
+        Gets a channel number within a stream from a frequency value or 
+        frequency index (accepts only one of these arguments, not both).
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency in Hz
+        frequency_index : int
+            Index of frequency in sorted list of all frequencies
+
+        Returns
+        -------
+        channel_num : int
+            Channel number within stream
+        '''
+        if (frequency == None and frequency_index == None) or \
+           (frequency != None and frequency_index != None):
+            raise ValueError('Exactly one keyword argument is required: frequency or frequency_index')
+
+        if frequency != None:
+            return self.channel_num[self.freqList == frequency]
+        elif frequency_index != None:
+            return self.channel_num[self.frequency_index == frequency_index]
+
+    def get_frequency(self, stream_num, channel_num):
+        '''
+        Get a frequency index from a stream and channel number.
+
+        Parameters
+        ----------
+        stream_num : int
+            Stream number
+        channel_num : int
+            Channel number
+
+        Returns
+        -------
+        frequency_index : int
+            Frequency index
+        '''
+        return self.frequency_index[(self.stream_num == stream_num) &
+                                    (self.channel_num == channel_num)]
+
+    def get_frequency_index(self, stream_num, channel_num):
+        '''
+        Get a frequency value in Hz from a stream and channel number.
+
+        Parameters
+        ----------
+        stream_num : int
+            Stream number
+        channel_num : int
+            Channel number
+
+        Returns
+        -------
+        frequency : float
+            Frequency
+        '''
+        return self.freqList[(self.stream_num == stream_num) &
+                             (self.channel_num == channel_num)]
         
     def generateFftChanSelection(self,freqChannels=None):
         '''
@@ -1237,47 +1340,7 @@ class Roach2:
         
         logging.debug('\t{}: {}\r'.format(chanNum, selBinNums))
         sys.stdout.flush()
-    
-    def getStreamChannelFromFreqChannel(self,freqCh=None):
-        '''
-        This function converts a channel indexed by the location in the freqlist
-        to a stream/channel in the Firmware
-        
-        Throws attribute error if self.freqList or self.freqChannels don't exist
-        Call self.generateResonatorChannels() first
-        
-        INPUTS:
-            freqCh - index or list of indices corresponding to the resonators location in the freqList
-        OUTPUTS:
-            ch - list of channel numbers for resonators in firmware
-            stream - stream(s) corresponding to ch
-        '''
-        if freqCh is None:
-            freqCh = range(len(self.freqList))
-        
-        channels = np.atleast_2d(self.freqChannelToStreamChannel[freqCh])[:,0]
-        streams = np.atleast_2d(self.freqChannelToStreamChannel[freqCh])[:,1]
-        return channels, streams
-        
-    def getFreqChannelFromStreamChannel(self, ch, stream):
-        '''
-        This function converts a stream/ch index from the firmware
-        to a channel indexed by the location in the freqList
-        
-        Throws attribute error if self.freqList or self.freqChannels don't exist
-        Call self.generateResonatorChannels() first
-        
-        INPUTS:
-            ch - value or list of channel numbers for resonators in firmware
-            stream - stream(s) corresponding to ch
-        OUTPUTS:
-            channel - list of indices corresponding to the resonator's location in the freqList
-        '''
-        
-        freqCh = self.streamChannelToFreqChannel[ch,stream]
-        return freqCh
-        
-        
+
     def setMaxCountRate(self, cpsLimit = 2500):
         for reg in self.params['captureCPSlim_regs']:
             try:
@@ -1293,7 +1356,8 @@ class Roach2:
             thresholdRad: The threshold in radians.  The phase must drop below this value to trigger a photon event
             freqChannel - channel as indexed by the freqList
         """
-        ch, stream = self.getStreamChannelFromFreqChannel(freqChannel)
+        ch = self.get_channel_num(frequency_index = freqChannel)
+        stream = self.get_stream_num(frequency_index = freqChannel)
         self.thresholdList[ch+(stream<<8)] = thresholdRad
         self.setThresh(thresholdRad = thresholdRad,ch=int(ch), stream=int(stream))
     
@@ -1353,7 +1417,8 @@ class Roach2:
         # Decide which channels to write FIRs to
         try:
             freqChans = range(len(self.freqList))
-            channels, streams = self.getStreamChannelFromFreqChannel(freqChans)
+            channels = self.get_channel_num(frequency_index = freqChannel)
+            streams = self.get_stream_num(frequency_index = freqChannel)
         except AttributeError:      # If we haven't loaded in frequencies yet then load FIRs into all channels
             freqChans = range(self.params['nChannels'])
             streams = np.repeat(range(self.params['nChannels']/self.params['nChannelsPerStream']), self.params['nChannelsPerStream'])
@@ -1399,7 +1464,8 @@ class Roach2:
         INPUTS:
             freqChan - the resonator channel as indexed in the freqList
         '''
-        ch, stream = self.getStreamChannelFromFreqChannel(freqChan)
+        ch = self.get_channel_num(frequency_index = freqChannel)
+        stream = self.get_stream_num(frequency_index = freqChannel)
         selChanIndex = (int(stream)<<8) + int(ch)
         logging.info("Taking phase snap from ch/stream: {} / {} selChanIndex: {}"
                      .format(ch, stream, selChanIndex))
@@ -1594,8 +1660,8 @@ class Roach2:
         OUTPUTS:
             phases - a list of phases in radians
         """
-        #ch, stream = self.freqChannelToStreamChannel(freqChan)
-        ch, stream = self.getStreamChannelFromFreqChannel(freqChan)
+        ch = self.get_channel_num(frequency_index = freqChan)
+        stream = self.get_stream_num(frequency_index = freqChan)
         selChanIndex = (int(stream) << 8) + int(ch)
         
         return self.takePhaseStreamData(selChanIndex, duration, pktsPerFrame, fabric_port, hostIP)
@@ -1772,7 +1838,8 @@ class Roach2:
         # Only return IQ data for channels/streams with resonators associated with them
         try:
             freqChans = range(len(self.freqList))
-            channels, streams = self.getStreamChannelFromFreqChannel(freqChans)
+            channels = self.get_channel_num(frequency_index = freqChannel)
+            streams = self.get_stream_num(frequency_index = freqChannel)
         except AttributeError:      # If we haven't loaded in frequencies yet then grab all channels
             freqChans = range(self.params['nChannels'])
             streams = np.repeat(range(self.params['nChannels']/self.params['nChannelsPerStream']), self.params['nChannelsPerStream'])
@@ -1849,8 +1916,8 @@ class Roach2:
                       Rows correspond to resonators in the same order as the freqlist
                       shape: [nFreqs, 2]
         """
-        #channels, streams = self.freqChannelToStreamChannel()
-        channels, streams = self.getStreamChannelFromFreqChannel()
+        channels = self.get_channel_num(frequency_index = freqChannel)
+        streams = self.get_stream_num(frequency_index = freqChannel)
         
         for i in range(len(centers)):
             ch = channels[i]
@@ -1911,7 +1978,7 @@ class Roach2:
 
         assert(len(freqs) == len(np.unique(freqs))), "Frequencies in "+fn+" need to be unique."
         assert(len(resIDs) == len(np.unique(resIDs))), "Resonator IDs in "+fn+" need to be unique."
-        argsSorted = np.argsort(freqs)  # sort them by frequency (I don't think this is needed)
+        argsSorted = np.argsort(freqs)  # sort them by frequency
         freqs = freqs[argsSorted]
         resIDs = resIDs[argsSorted]
         attens = attens[argsSorted]
