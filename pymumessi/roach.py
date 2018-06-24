@@ -151,15 +151,16 @@ class Roach2:
         self.originalDdsShift = self.checkDdsShift()
         self.newDdsShift = self.loadDdsShift(self.originalDdsShift)
 
-        # load the frequencies
-        freq_filename = self.config.get(self.roachString, 'freqfile')
-        freq_data = np.loadtxt(freq_filename)
-        self.resonator_ids = np.atleast_1d(freq_data[:,0])
-        self.frequencies = np.atleast_1d(freq_data[:,1])
-        self.attenuations = np.atleast_1d(freq_data[:,2])
+        # AJA: Probably can be deprecated by the hardware map machinery.
+        # # load the frequencies
+        # freq_filename = self.config.get(self.roachString, 'freqfile')
+        # freq_data = np.loadtxt(freq_filename)
+        # self.resonator_ids = np.atleast_1d(freq_data[:,0])
+        # self.frequencies = np.atleast_1d(freq_data[:,1])
+        # self.attenuations = np.atleast_1d(freq_data[:,2])
 
-        # construct the channel information
-        self.generate_resonator_channels(self.frequencies)
+        # # construct the channel information
+        # self.generate_resonator_channels(self.frequencies)
         
     def connect(self):
         try:
