@@ -30,15 +30,6 @@ logger = LM.get_child_logger(target=args.roachNum,
                              alg_name='initialize',
                              setup=True)
 rootlogger = logging.getLogger()
-
-# # Get the configuration
-# logger.info('Reading configuration file: {}'.format(args.config))
-# config = ConfigParser()
-# config.read(args.config)
-# for section in config.sections():
-#     logger.debug('   CONFIGURATION SECTION : {}'.format(section))
-#     for item in config.items(section):
-#         logger.debug(msg='   {:20s} : {}'.format(item[0], item[1]))
     
 roach = Roach2(args.roachNum, args.config, False)
 roach.connect() # do we really need to do this every time?
