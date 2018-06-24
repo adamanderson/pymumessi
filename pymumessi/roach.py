@@ -148,6 +148,11 @@ class Roach2:
         self.lut_dump_buffer_size = self.params['lut_dump_buffer_size']
         self.thresholdList = -np.pi*np.ones(1024)
         self.waitForV7Ready = self.config.getboolean(self.roachString, 'waitForV7Ready')
+        self.sweeplospan = self.config.get(self.roachString, 'sweeplospan')
+        self.sweeplostep = self.config.get(self.roachString, 'sweeplostep')
+        self.dacatten_start = self.config.get(self.roachString, 'dacatten_start')
+        self.dacatten_stop = self.config.get(self.roachString, 'dacatten_stop')
+        self.adcatten = self.config.get(self.roachString, 'adcatten')
         
         self.connect()
         self.originalDdsShift = self.checkDdsShift()
