@@ -124,6 +124,7 @@ class Roach2:
         self.config.read(configFile)
         self.roachString = 'Roach {:d}'.format(roachNumber)
         self.FPGAParamFile = self.config.get(self.roachString, 'FPGAParamFile')
+        self.FPGAFirmwareFile = self.config.get(self.roachString, 'fpgPath')
         self.ip = self.config.get(self.roachString, 'ipaddress')
         self.port = int(self.config.get(self.roachString, 'port'))
         
@@ -146,7 +147,8 @@ class Roach2:
         self.v7_ready = 0
         self.lut_dump_buffer_size = self.params['lut_dump_buffer_size']
         self.thresholdList = -np.pi*np.ones(1024)
-
+        self.waitForV7Ready = self.config.getboolean(self.roachString, 'waitForV7Ready')
+        
         self.connect()
         self.originalDdsShift = self.checkDdsShift()
         self.newDdsShift = self.loadDdsShift(self.originalDdsShift)

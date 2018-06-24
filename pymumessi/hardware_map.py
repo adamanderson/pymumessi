@@ -47,7 +47,9 @@ def build(config_file, resonator_files=None):
 
     if resonator_files is None:
         CP = ConfigParser.ConfigParser()
-        CP.read(config_file)
+        d = CP.read(config_file)
+        if len(d) != 1:
+            raise IOError('Cannot find configuration file {}'.format(config_file))
         resonator_files = [CP.get(section, 'hwm') for section in CP.sections()
                            if 'Roach' in section]
 
@@ -93,3 +95,20 @@ def validate_hwm(config, hwm):
     if np.array_equal(boards_in_config, boards_in_hwm) is False:
         raise KeyError('Board numbers present in config file do not match '
                        'board numbers present in hardware map files.')
+
+
+def get_roaches(hwm):
+    '''
+    Get the set of roach contained in the HWM DataFrame.
+
+    Parameters
+    ----------
+    hwm : pandas DataFrame
+        Hardware map from which to extract Roach2 objects
+
+    Returns
+    -------
+    roaches : list
+        Roach2 objects
+    '''
+    return np.unique(hwm['Roach2_object'])
