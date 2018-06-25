@@ -7,7 +7,7 @@ import numpy as np
 def load_frequencies(hwm):
     roaches = hardware_map.get_roaches(hwm)
     for roach in roaches:
-        roach.loadFreq()
+        roach.load_freq(hwm)
 
         
 def define_roach_lut(hwm):

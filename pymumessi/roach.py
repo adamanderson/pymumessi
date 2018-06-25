@@ -19,17 +19,17 @@ Example usage:
     nFreqs=1024
     loFreq = 5.e9
     spacing = 2.e6
-    freqList = np.arange(loFreq-nFreqs/2.*spacing,loFreq+nFreqs/2.*spacing,spacing)
-    freqList+=np.random.uniform(-spacing,spacing,nFreqs)
-    freqList = np.sort(freqList)
+    frequencies = np.arange(loFreq-nFreqs/2.*spacing,loFreq+nFreqs/2.*spacing,spacing)
+    frequencies+=np.random.uniform(-spacing,spacing,nFreqs)
+    frequencies = np.sort(frequencies)
     attenList = np.random.randint(23,33,nFreqs)
     
     # Talk to Roach
     roach_0 = Roach2Controls(ip, params, True, True)
     roach_0.setLOFreq(loFreq)
-    roach_0.generateResonatorChannels(freqList)
+    roach_0.generate_resonator_channels(frequencies)
     roach_0.generateFftChanSelection()
-    roach_0.generateDacComb(freqList=None, resAttenList=attenList, globalDacAtten=17)
+    roach_0.generateDacComb(frequencies=None, resAttenList=attenList, globalDacAtten=17)
     roach_0.generateDdsTones()
     
     roach_0.loadChanSelection()
@@ -43,7 +43,7 @@ List of Functions:
     connect -                       Connect to V6 FPGA on Roach2
     initializeV7UART -              Initializes the UART connection to the Virtex 7
     loadDdsShift -                  Set the delay between the dds lut and the end of the fft block
-    generateResonatorChannels -     Figures out which stream:channel to assign to each resonator frequency
+    generate_resonator_channels -     Figures out which stream:channel to assign to each resonator frequency
     generateFftChanSelection -      Assigns fftBins to each steam:channel
     loadSingleChanSelection -       Loads a channel for each stream into the channel selector LUT
     loadChanSelection -             Loops through loadSingleChanSelection()
@@ -60,7 +60,7 @@ List of Functions:
 List of useful class attributes:
     ip -                            ip address of roach2
     params -                        Dictionary of parameters
-    freqList -                      List of resonator frequencies
+    frequencies -                      List of resonator frequencies
     attenList -                     List of resonator attenuations
     freqChannels -                  2D array of frequencies. Each column is the a stream and each row is a channel. 
                                     If uneven number of frequencies this array is padded with -1's
@@ -81,7 +81,7 @@ TODO:
     Changed delays in performIQSweep(), and takeAvgIQData() from 0.1 to 0.01 seconds
 
 BUGS:
-    The frequencies in freqList are assumed to be unique. 
+    The frequencies in frequencies are assumed to be unique. 
     If they aren't, then there are problems determining which frequency corresponds to which ch/stream. 
     This should be fixed with some indexing tricks which don't rely on np.where
 """
@@ -122,12 +122,13 @@ class Roach2:
 
         self.config = ConfigParser.ConfigParser()
         self.config.read(configFile)
+        self.roach_num = roachNumber
         self.roachString = 'Roach {:d}'.format(roachNumber)
         self.FPGAParamFile = self.config.get(self.roachString, 'FPGAParamFile')
         self.FPGAFirmwareFile = self.config.get(self.roachString, 'fpgPath')
         self.ip = self.config.get(self.roachString, 'ipaddress')
         self.port = int(self.config.get(self.roachString, 'port'))
-        
+        self.hwmfile = self.config.get(self.roachString, 'hwm')
         self.debug=debug
 
         try:
@@ -158,16 +159,6 @@ class Roach2:
         self.originalDdsShift = self.checkDdsShift()
         self.newDdsShift = self.loadDdsShift(self.originalDdsShift)
 
-        # AJA: Probably can be deprecated by the hardware map machinery.
-        # # load the frequencies
-        # freq_filename = self.config.get(self.roachString, 'freqfile')
-        # freq_data = np.loadtxt(freq_filename)
-        # self.resonator_ids = np.atleast_1d(freq_data[:,0])
-        # self.frequencies = np.atleast_1d(freq_data[:,1])
-        # self.attenuations = np.atleast_1d(freq_data[:,2])
-
-        # # construct the channel information
-        # self.generate_resonator_channels(self.frequencies)
         
     def connect(self):
         try:
@@ -325,13 +316,13 @@ class Roach2:
         """
         Create and interweave dds frequencies
         
-        Call setLOFreq(), generateResonatorChannels(), generateFftChanSelection() first.
+        Call setLOFreq(), generate_resonator_channels(), generateFftChanSelection() first.
         
         Sets self.ddsPhaseList
         
         INPUT:
             freqChannels - Each column contains the resonantor frequencies in a single stream. The row index is the channel number. It's padded with -1's. 
-                           Made by generateResonatorChannels(). If None, use self.freqChannels
+                           Made by generate_resonator_channels(). If None, use self.freqChannels
             fftBinIndChannels - Same shape as freqChannels but contains the fft bin index. Made by generateFftChanSelection(). If None, use self.fftBinIndChannels
             phaseList - Same shape as freqChannels. Contains phase offsets (0 to 2Pi) for dds sampling. 
                         If None, set to self.ddsPhaseList. if self.ddsPhaseList doesn't exist then set to all zeros
@@ -947,13 +938,13 @@ class Roach2:
         """
         # Interpret Inputs
         if freqList is None:
-            freqList=self.freqList
+            freqList=self.frequencies
         if len(freqList)>self.params['nChannels']:
             warnings.warn("Too many freqs provided. Can only accommodate "+str(self.params['nChannels'])+" resonators")
             freqList = freqList[:self.params['nChannels']]
         freqList = np.ravel(freqList).flatten()
         if resAttenList is None:
-            try: resAttenList = self.attenList
+            try: resAttenList = self.attenuations
             except AttributeError: 
                 warnings.warn("Individual resonator attenuations assumed to be 20")
                 resAttenList=np.zeros(len(freqList))+20
@@ -967,8 +958,8 @@ class Roach2:
             raise ValueError("Need exactly one phase value for each resonant frequency!")
         if np.any(resAttenList < globalDacAtten):
             raise ValueError("Impossible to attain desired resonator attenuations! Decrease the global DAC attenuation.")
-        self.attenList = resAttenList
-        self.freqList = freqList
+        self.attenuations = resAttenList
+        self.frequencies = freqList
         
         logging.error('Generating DAC comb...')
         
@@ -984,7 +975,7 @@ class Roach2:
         # Calculate resonator frequencies for DAC
         if not hasattr(self,'LOFreq'):
             raise ValueError("Need to set LO freq by calling setLOFreq()")
-        dacFreqList = self.freqList-self.LOFreq
+        dacFreqList = self.frequencies-self.LOFreq
         dacFreqList[np.where(dacFreqList<0.)] += self.params['dacSampleRate']  #For +/- freq
         
         # Generate and add up individual tone time series.
@@ -1100,16 +1091,16 @@ class Roach2:
         """
         #Interpret inputs...
         if order not in ['F','C','A','stream']:  #if invalid, grab default value
-            args,__,__,defaults = inspect.getargspec(Roach2Controls.generateResonatorChannels)
+            args,__,__,defaults = inspect.getargspec(self.generate_resonator_channels)
             order = defaults[args.index('order')-len(args)]
-            logging.debug("Invalid 'order' parameter for generateResonatorChannels(). Changed to default: {}".format(order))
+            logging.debug("Invalid 'order' parameter for generate_resonator_channels(). Changed to default: {}".format(order))
         if len(np.array(freqList))>self.params['nChannels']:
             logging.warning("Too many freqs provided. Can only accommodate {} resonators".format(self.params['nChannels']))
             freqList = freqList[:self.params['nChannels']]
-        self.freqList = np.ravel(freqList)
-        if len(np.unique(self.freqList)) != len(self.freqList):
+        self.frequencies = np.ravel(freqList)
+        if len(np.unique(self.frequencies)) != len(self.frequencies):
             raise ValueError
-        self.freqChannels = self.freqList
+        self.freqChannels = self.frequencies
         logging.debug('Generating Resonator Channels...')
         
         #Pad with freq = -1 so that freqChannels's length is a multiple of nStreams
@@ -1124,7 +1115,7 @@ class Roach2:
             padNum = (nStreams - (len(self.freqChannels) % nStreams))%nStreams  # number of empty elements to pad
             self.freqChannels = np.append(self.freqChannels, [padValue]*(padNum))
         elif order == 'stream':
-            nFreqs = len(self.freqList)
+            nFreqs = len(self.frequencies)
             if nFreqs < self.params['nChannelsPerStream']:
                 padNum = nFreqs * (nStreams-1)
             else:
@@ -1140,12 +1131,12 @@ class Roach2:
         # but I've made a temporary cleanup of this for intermediate testing
         # purposes. I didn't change the logic significantly here, which is
         # admittedly pretty crappy.
-        self.frequency_index = np.arange(len(self.freqList))
-        self.channel_num = np.zeros(len(self.freqList))
-        self.stream_num = np.zeros(len(self.freqList))
-        for jfreq in range(len(self.freqList)):
+        self.frequency_index = np.arange(len(self.frequencies))
+        self.channel_num = np.zeros(len(self.frequencies))
+        self.stream_num = np.zeros(len(self.frequencies))
+        for jfreq in range(len(self.frequencies)):
             self.channel_num[jfreq], self.stream_num[jfreq] = \
-                np.where(self.freqChannels == self.freqList[jfreq])
+                np.where(self.freqChannels == self.frequencies[jfreq])
             
             logging.debug('\tFreq Channels: {}'.format(self.freqChannels))
             logging.debug('...Done!')
@@ -1174,7 +1165,7 @@ class Roach2:
             raise ValueError('Exactly one keyword argument is required: frequency or frequency_index')
 
         if frequency != None:
-            return self.stream_num[self.freqList == frequency]
+            return self.stream_num[self.frequencies == frequency]
         elif frequency_index != None:
             return self.stream_num[self.frequency_index == frequency_index]
 
@@ -1200,7 +1191,7 @@ class Roach2:
             raise ValueError('Exactly one keyword argument is required: frequency or frequency_index')
 
         if frequency != None:
-            return self.channel_num[self.freqList == frequency]
+            return self.channel_num[self.frequencies == frequency]
         elif frequency_index != None:
             return self.channel_num[self.frequency_index == frequency_index]
 
@@ -1239,14 +1230,14 @@ class Roach2:
         frequency : float
             Frequency
         '''
-        return self.freqList[(self.stream_num == stream_num) &
+        return self.frequencies[(self.stream_num == stream_num) &
                              (self.channel_num == channel_num)]
         
     def generateFftChanSelection(self,freqChannels=None):
         '''
         This calculates the fftBin index for each resonant frequency and arranges them by stream and channel.
         Used by channel selector block
-        Call setLOFreq() and generateResonatorChannels() first.
+        Call setLOFreq() and generate_resonator_channels() first.
         
         INPUTS (optional):
             freqChannels - 2D array of frequencies where each column is the a stream and each row is a channel. If freqChannels isn't given then try to grab it from attribute. 
@@ -1259,7 +1250,7 @@ class Roach2:
             try:
                 freqChannels = self.freqChannels
             except AttributeError:
-                logging.error("Run generateResonatorChannels() first!")
+                logging.error("Run generate_resonator_channels() first!")
                 raise
         freqChannels = np.asarray(freqChannels)
         logging.debug("Finding FFT Bins...")
@@ -1412,19 +1403,19 @@ class Roach2:
         You can provide a filter for each resonator channel or just a single filter that's applied to each resonator
         Any channels without resonators have their filter taps set to 0
         
-        If self.freqList and self.freqChannels don't exist then it loads FIR coefficients into every channel
+        If self.frequencies and self.freqChannels don't exist then it loads FIR coefficients into every channel
         Be careful, depending on how you set up the channel selection block you might assign the wrong filters to the resonators
-        (see self.generateResonatorChannels() for making self.freqList, self.freqChannels)
+        (see self.generate_resonator_channels() for making self.frequencies, self.freqChannels)
         
         INPUTS:
             coeffFile - path to plain text file that contains a 2d array
-                        The i'th column corresponds to the i'th resonator in the freqList
-                        If there is only one column then use it for every resonator in the freqList
+                        The i'th column corresponds to the i'th resonator in the frequencies
+                        If there is only one column then use it for every resonator in the frequencies
                         The j'th row is the filter's coefficient for the j'th tap 
         '''
         # Decide which channels to write FIRs to
         try:
-            freqChans = range(len(self.freqList))
+            freqChans = range(len(self.frequencies))
             channels = self.get_channel_num(frequency_index = freqChannel)
             streams = self.get_stream_num(frequency_index = freqChannel)
         except AttributeError:      # If we haven't loaded in frequencies yet then load FIRs into all channels
@@ -1470,7 +1461,7 @@ class Roach2:
         This function overloads takePhaseSnapshot
         
         INPUTS:
-            freqChan - the resonator channel as indexed in the freqList
+            freqChan - the resonator channel as indexed in the frequencies
         '''
         ch = self.get_channel_num(frequency_index = freqChannel)
         stream = self.get_stream_num(frequency_index = freqChannel)
@@ -1659,7 +1650,7 @@ class Roach2:
         This function overloads takePhaseStreamData() but uses the channel index corresponding to the freqlist instead of a ch/stream index
         
         INPUTS:
-            freqChan - which channel to collect phase on. freqChan corresponds to the resonator index in freqList
+            freqChan - which channel to collect phase on. freqChan corresponds to the resonator index in frequencies
             duration - duration (in seconds) of stream
             pktsPerFrame - number of 8 byte photon words per ethernet frame
             fabric_port -
@@ -1831,9 +1822,9 @@ class Roach2:
     def formatIQSweepData(self, iqDataStreams):
         """
         Reshapes the iqdata into a usable format
-        Need to put the data in the same order as the freqList that was loaded in
+        Need to put the data in the same order as the frequencies that was loaded in
         
-        If we haven't loaded in a freqList then the order is channels 0..256 in stream 0, then stream 1, etc..
+        If we haven't loaded in a frequencies then the order is channels 0..256 in stream 0, then stream 1, etc..
         
         INPUTS:
             iqDataStreams - 2D array with following shape:
@@ -1845,7 +1836,7 @@ class Roach2:
         """
         # Only return IQ data for channels/streams with resonators associated with them
         try:
-            freqChans = range(len(self.freqList))
+            freqChans = range(len(self.frequencies))
             channels = self.get_channel_num(frequency_index = freqChannel)
             streams = self.get_stream_num(frequency_index = freqChannel)
         except AttributeError:      # If we haven't loaded in frequencies yet then grab all channels
@@ -1952,57 +1943,46 @@ class Roach2:
         self.fpga.write_int(self.params['txEnUART_reg'],0)        
         
     
-    def loadFreq(self):
+    def load_freq(self, hwm):
         '''                   
-        Loads the resonator freq files (and attenuations, resIDs)                                                                                          divides the resonators into streams
+        Update frequency information from hardware map.
+
+        Parameters
+        ----------
+        hwm : pandas DataFrame
+            Hardware map
+
+        Returns
+        -------
+        outcome : bool
+            True if successful
         '''
-        try:
-            logging.info('old Freq: {}'.format(self.roachController.freqList))
-        except: pass
-        fn = self.config.get(self.roachString,'freqfile')
-        fn2=fn.rsplit('.',1)[0]+'_NEW.'+ fn.rsplit('.',1)[1]         # Check if ps_freq#_NEW.txt exists
-        logging.info("RoachStateMachine.loadFreq:  fn, fn2 = {}, {}".format(fn,fn2))
-        if os.path.isfile(fn2):
-            fn=fn2
-            logging.info('Loading freqs from {}'.format(fn))
+        self.resIDs = hwm.loc[hwm['board'] == self.roach_num]['channel_index']
+        self.frequencies = hwm.loc[hwm['board'] == self.roach_num]['frequency']
+        self.attenuations = hwm.loc[hwm['board'] == self.roach_num]['attenuation']
+        self.phaseOffsList = np.zeros(len(self.frequencies))
+        self.iqRatioList = np.ones(len(self.frequencies))
 
-        freqFile = np.loadtxt(fn)
+        assert(len(self.frequencies) == len(np.unique(self.frequencies))), \
+            "Frequencies in "+fn+" need to be unique."
+        assert(len(self.resIDs) == len(np.unique(self.resIDs))), \
+            "Resonator IDs in "+fn+" need to be unique."
+        
+        sort_ind = np.argsort(self.frequencies)  # sort them by frequency
+        self.frequencies = self.frequencies[sort_ind]
+        self.resIDs = self.resIDs[sort_ind]
+        self.attenuations = self.attenuations[sort_ind]
+        self.phaseOffsList = self.phaseOffsList[sort_ind]
+        self.iqRatioList = self.iqRatioList[sort_ind]
+        for i in range(len(self.frequencies)):
+            logging.info('{} {} {} {} {} {}'.format(i,
+                                                    self.resIDs[i],
+                                                    self.frequencies[i],
+                                                    self.attenuations[i],
+                                                    self.phaseOffsList[i],
+                                                    self.iqRatioList[i]))
 
-        #if np.shape(freqFile)[1]==3:
-        if len(np.shape(freqFile))==2: # more than 1 frequency given
-            resIDs = np.atleast_1d(freqFile[:,0])       # If there's only 1 resonator numpy loads it in as a float.
-            freqs = np.atleast_1d(freqFile[:,1])     # We need an array of floats
-            attens = np.atleast_1d(freqFile[:,2])
-            phaseOffsList = np.zeros(len(freqs))
-            iqRatioList = np.ones(len(freqs))
-        elif len(np.shape(freqFile)) == 1: # only 1 frequency given
-            resIDs = np.atleast_1d(freqFile[0])       # If there's only 1 resonator numpy loads it in as a float.
-            freqs = np.atleast_1d(freqFile[1])        # Convert this to an array of floats
-            attens = np.atleast_1d(freqFile[2])
-            phaseOffsList = np.zeros(len(freqs))
-            iqRatioList = np.ones(len(freqs))
-        else:
-            raise ValueError('I can not deal with len(np.shape(freqFile)) = %d'%len(np.shape(freqFile)))
-
-        assert(len(freqs) == len(np.unique(freqs))), "Frequencies in "+fn+" need to be unique."
-        assert(len(resIDs) == len(np.unique(resIDs))), "Resonator IDs in "+fn+" need to be unique."
-        argsSorted = np.argsort(freqs)  # sort them by frequency
-        freqs = freqs[argsSorted]
-        resIDs = resIDs[argsSorted]
-        attens = attens[argsSorted]
-        phaseOffsList = iqRatioList[argsSorted]
-        iqRatioList = iqRatioList[argsSorted]
-        for i in range(len(freqs)):
-            logging.info('{} {} {} {} {} {}'.format(i, resIDs[i], freqs[i],
-                                                    attens[i], phaseOffsList[i],
-                                                    iqRatioList[i]))
-
-        self.generateResonatorChannels(freqs)
-        self.attenList = attens
-        self.resIDs = resIDs
-        self.phaseOffsList = phaseOffsList
-        self.iqRatioList = iqRatioList
-        logging.info('new Freq: {}'.format(self.freqList))
+        self.generate_resonator_channels(self.frequencies)
 
         return True
 
