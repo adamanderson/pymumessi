@@ -67,4 +67,4 @@ if __name__ == '__main__':
         start_ADCAtten = roach.adcatten
 
         # run the sweep itself
-        sweep_data = roach_board.performIQSweep(LO_start/1.e6, LO_stop/1.e6, LO_step/1.e6)
+        sweep_data = roach.performIQSweep(LO_start/1.e6, LO_stop/1.e6, LO_step/1.e6)

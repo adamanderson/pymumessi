@@ -149,11 +149,11 @@ class Roach2:
         self.lut_dump_buffer_size = self.params['lut_dump_buffer_size']
         self.thresholdList = -np.pi*np.ones(1024)
         self.waitForV7Ready = self.config.getboolean(self.roachString, 'waitForV7Ready')
-        self.sweeplospan = self.config.get(self.roachString, 'sweeplospan')
-        self.sweeplostep = self.config.get(self.roachString, 'sweeplostep')
-        self.dacatten_start = self.config.get(self.roachString, 'dacatten_start')
-        self.dacatten_stop = self.config.get(self.roachString, 'dacatten_stop')
-        self.adcatten = self.config.get(self.roachString, 'adcatten')
+        self.sweeplospan = float(self.config.get(self.roachString, 'sweeplospan'))
+        self.sweeplostep = float(self.config.get(self.roachString, 'sweeplostep'))
+        self.dacatten_start = float(self.config.get(self.roachString, 'dacatten_start'))
+        self.dacatten_stop = float(self.config.get(self.roachString, 'dacatten_stop'))
+        self.adcatten = float(self.config.get(self.roachString, 'adcatten'))
         
         self.connect()
         self.originalDdsShift = self.checkDdsShift()
@@ -940,16 +940,16 @@ class Roach2:
         if freqList is None:
             freqList=self.frequencies
         if len(freqList)>self.params['nChannels']:
-            warnings.warn("Too many freqs provided. Can only accommodate "+str(self.params['nChannels'])+" resonators")
+            rootlogger.warning("Too many freqs provided. Can only accommodate "+str(self.params['nChannels'])+" resonators")
             freqList = freqList[:self.params['nChannels']]
         freqList = np.ravel(freqList).flatten()
         if resAttenList is None:
             try: resAttenList = self.attenuations
             except AttributeError: 
-                warnings.warn("Individual resonator attenuations assumed to be 20")
+                rootlogger.warning("Individual resonator attenuations assumed to be 20")
                 resAttenList=np.zeros(len(freqList))+20
         if len(resAttenList)>self.params['nChannels']:
-            warnings.warn("Too many attenuations provided. Can only accommodate "+str(self.params['nChannels'])+" resonators")
+            rootlogger.warning("Too many attenuations provided. Can only accommodate "+str(self.params['nChannels'])+" resonators")
             resAttenList = resAttenList[:self.params['nChannels']]
         resAttenList = np.ravel(resAttenList).flatten()
         if len(freqList) != len(resAttenList):
@@ -961,7 +961,7 @@ class Roach2:
         self.attenuations = resAttenList
         self.frequencies = freqList
         
-        logging.error('Generating DAC comb...')
+        rootlogger.error('Generating DAC comb...')
         
         # Calculate relative amplitudes for DAC LUT
         nBitsPerSampleComponent = self.params['nBitsPerSamplePair']/2
@@ -1000,7 +1000,7 @@ class Roach2:
         logging.debug('\tUsing {} percent of DAC dynamic range'
                       .format(1.0*highestVal/maxAmp*100))
         logging.debug('\thighest: {} out of {}'.format(highestVal, maxAmp))
-        logging.debug('\tsigma_I: {} sigma_Q: {}'+format(iValues, qValues))
+        logging.debug('\tsigma_I: {} sigma_Q: {}'.format(iValues, qValues))
         logging.debug('\tLargest val_I: {} sigma. Largest val_Q: {} sigma.'
                       .format(1.0*np.abs(iValues).max()/np.std(iValues),
                               1.0*np.abs(qValues).max()/np.std(qValues)))
@@ -1008,13 +1008,13 @@ class Roach2:
                       .format(expectedHighestVal_sig))
             
         if highestVal > expectedHighestVal_sig*np.max((np.std(iValues),np.std(qValues))):
-            warnings.warn("The freq comb's relative phases may have added up sub-optimally. You should calculate new random phases")
+            rootlogger.warning("The freq comb's relative phases may have added up sub-optimally. You should calculate new random phases")
         if highestVal > maxAmp:
             dBexcess = int(np.ceil(20.*np.log10(1.0*highestVal/maxAmp)))
             raise ValueError("Not enough dynamic range in DAC! Try decreasing the global DAC Attenuator by "+str(dBexcess)+' dB')
         elif 1.0*maxAmp/highestVal > 10**((1)/20.):
             # all amplitudes in DAC less than 1 dB below max allowed by dynamic range
-            warnings.warn("DAC Dynamic range not fully utilized. Increase global attenuation by: "+str(int(np.floor(20.*np.log10(1.0*maxAmp/highestVal))))+' dB')
+            rootlogger.warning("DAC Dynamic range not fully utilized. Increase global attenuation by: "+str(int(np.floor(20.*np.log10(1.0*maxAmp/highestVal))))+' dB')
         
         logging.debug('...Done!')
 
@@ -1995,7 +1995,7 @@ class Roach2:
         writing the QDR takes a long time! :-(
         '''
         loFreq = int(self.config.getfloat(self.roachString,'lo_freq'))
-        self.setLOFreq(loFreq)
+        self.setLOFreq(float(loFreq))
         self.generateFftChanSelection()
         ddsTones = self.generateDdsTones()
         self.loadChanSelection()
