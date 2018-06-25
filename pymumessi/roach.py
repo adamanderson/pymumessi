@@ -1837,8 +1837,8 @@ class Roach2:
         # Only return IQ data for channels/streams with resonators associated with them
         try:
             freqChans = range(len(self.frequencies))
-            channels = self.get_channel_num(frequency_index = freqChannel)
-            streams = self.get_stream_num(frequency_index = freqChannel)
+            channels = self.get_channel_num(frequency_index = freqChans)
+            streams = self.get_stream_num(frequency_index = freqChans)
         except AttributeError:      # If we haven't loaded in frequencies yet then grab all channels
             freqChans = range(self.params['nChannels'])
             streams = np.repeat(range(self.params['nChannels']/self.params['nChannelsPerStream']), self.params['nChannelsPerStream'])
